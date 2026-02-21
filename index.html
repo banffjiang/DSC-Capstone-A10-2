@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TeleSpeak | Project Website</title>
+  <meta name="description" content="TeleSpeak: Modeling Early Language Acquisition with Reinforcement Learning for Large Language Models" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="hero">
+    <div class="hero__inner">
+      <p class="eyebrow">DSC Capstone · RL + Linguistics</p>
+      <h1>TeleSpeak</h1>
+      <p class="subtitle">Modeling Early Language Acquisition with Reinforcement Learning for Large Language Models</p>
+      <p class="authors">Banff Jiang · Colin Wang · Longhao Lin · Alex Warstadt</p>
+      <div class="links">
+        <a href="https://github.com/banffjiang/DSC-Capstone-A10-2.git" target="_blank" rel="noreferrer">Code</a>
+        <a href="#references">References</a>
+      </div>
+    </div>
+    <div class="hero__glow" aria-hidden="true"></div>
+  </header>
+
+  <main>
+    <section id="abstract" class="panel">
+      <h2>Abstract</h2>
+      <p>
+        We investigate whether <strong>telegraphic speech</strong>, the early developmental stage where children prefer short,
+        content-word-heavy utterances, can emerge from optimization under production constraints.
+        Our framework uses a <strong>speaker-listener setup</strong> trained with <strong>Direct Preference Optimization (DPO)</strong>.
+        The speaker generates candidate summaries for Simple Wikipedia passages, while a RoBERTa-based listener scores semantic
+        fidelity using BERTScore to construct preference pairs. We then add a dynamic length objective that encourages concise outputs
+        early in training and relaxes over time.
+      </p>
+    </section>
+
+    <section id="problem" class="panel grid2">
+      <article>
+        <h2>Problem</h2>
+        <p>
+          Modern LLMs need far more data than human learners. BabyLM asks whether models can learn effectively under strict token budgets.
+          Telegraphic speech offers a grounded hypothesis: maybe short, meaning-dense language is a rational strategy under cognitive and
+          production limits.
+        </p>
+      </article>
+      <article>
+        <h2>Research Question</h2>
+        <p>
+          Does early one-word or two-word production emerge from high production cost rather than an innate linguistic limit?
+          We test this by rewarding semantic success while penalizing output length.
+        </p>
+      </article>
+    </section>
+
+    <section id="methods" class="panel">
+      <h2>Methods</h2>
+      <div class="cards">
+        <article class="card">
+          <h3>Data</h3>
+          <p>Simple Wikipedia passages (BabyLM setup), preprocessed to JSONL:</p>
+          <pre><code>{"id": int, "source": "simplewiki", "passage": str}</code></pre>
+        </article>
+        <article class="card">
+          <h3>Speaker</h3>
+          <p>GPT-2 generates candidate summaries using seeded sampling with top-p and temperature.</p>
+        </article>
+        <article class="card">
+          <h3>Listener</h3>
+          <p>RoBERTa-large computes BERTScore-based semantic preference signals.</p>
+        </article>
+        <article class="card">
+          <h3>Preference Filtering</h3>
+          <p>
+            Candidate pairs are diversity-filtered via 2-gram Jaccard similarity. Overly similar pairs are regenerated;
+            persistent near-duplicates are discarded.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section id="objective" class="panel">
+      <h2>Training Objective</h2>
+      <p>We combine DPO preference logits with a decaying length advantage term:</p>
+      <pre><code>logits = beta * pref_logits + alpha(t) * len_adv
+L = -log(sigmoid(logits))
+
+pref_logits = (log pi_theta(y_c|x) - log pi_theta(y_r|x))
+            - (log pi_ref(y_c|x)   - log pi_ref(y_r|x))
+
+len_adv = (len_r - len_c) / (len_r + len_c + epsilon)
+alpha(t) = alpha_0 * exp(-k * t)</code></pre>
+      <p>
+        This design enforces short outputs early, then gradually prioritizes semantic preference learning as training proceeds.
+      </p>
+    </section>
+
+    <section id="results" class="panel grid2">
+      <article>
+        <h2>Preliminary Results</h2>
+        <p>
+          Early training shows stable loss behavior before full sweep experiments. We use Weights &amp; Biases tracking to compare
+          hyperparameter choices such as <code>beta</code>, decay rate, sampling settings, and diversity thresholds.
+        </p>
+      </article>
+      <article class="placeholder-figure" aria-label="Result figure placeholder">
+        <p>Loss Curve Placeholder</p>
+        <span>Add: <code>figure/loss_figure.png</code></span>
+      </article>
+    </section>
+
+    <section id="conclusion" class="panel">
+      <h2>Conclusion</h2>
+      <p>
+        TeleSpeak frames telegraphic output as an optimization outcome, not just a developmental limitation. By combining DPO with
+        length-aware curriculum pressure, this project provides a testbed for studying efficient, human-like language learning behavior
+        under realistic data constraints.
+      </p>
+    </section>
+
+    <section id="references" class="panel">
+      <h2>References</h2>
+      <ol>
+        <li>BabyLM Challenge (shared task datasets and constraints).</li>
+        <li>Rafailov et al. (2023). Direct Preference Optimization.</li>
+        <li>Zhang et al. (2020). BERTScore: Evaluating text generation with contextual embeddings.</li>
+        <li>Padovani et al. (2025). Reinforcement-learning approaches in BabyLM submissions.</li>
+        <li>Stopler et al. (2025). Text-game style RL framing for language learning.</li>
+        <li>Lazaridou et al. (2016). Multi-agent communication and reference games.</li>
+      </ol>
+    </section>
+  </main>
+
+  <footer>
+    <p>TeleSpeak Project Website</p>
+  </footer>
+</body>
+</html>
