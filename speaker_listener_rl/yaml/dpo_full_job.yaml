@@ -112,12 +112,12 @@ spec:
           requests:
             memory: "16Gi"
             cpu: "8"
-            ephemeral-storage: "1Gi"
+            #ephemeral-storage: "1Gi"
             nvidia.com/gpu: "1"
           limits:
             memory: "32Gi"
             cpu: "16"
-            ephemeral-storage: "2Gi"
+            #ephemeral-storage: "2Gi"
             nvidia.com/gpu: "1"
 
       restartPolicy: Never
