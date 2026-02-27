@@ -16,6 +16,8 @@ spec:
                 operator: In
                 values:
                 - NVIDIA-A10
+                - NVIDIA-A40
+                - NVIDIA-GeForce-RTX-3090
 
       initContainers:
       - name: init-permissions
