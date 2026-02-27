@@ -108,14 +108,14 @@ spec:
         
         resources:
           requests:
-            memory: "32Gi"
+            memory: "16Gi"
             cpu: "8"
-            ephemeral-storage: "10Gi"
+            ephemeral-storage: "1Gi"
             nvidia.com/gpu: "1"
           limits:
             memory: "32Gi"
             cpu: "16"
-            ephemeral-storage: "20Gi"
+            ephemeral-storage: "2Gi"
             nvidia.com/gpu: "1"
 
       restartPolicy: Never

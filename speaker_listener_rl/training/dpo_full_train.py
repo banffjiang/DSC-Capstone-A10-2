@@ -151,7 +151,6 @@ def _anneal_alpha(epoch, max_epochs, alpha0, k):
 
 def kl_tokenwise(policy_logits, ref_logits, mask):
     #choses to use ref or policy for each tokens then computes
-    print(policy_logits.shape, ref_logits.shape, mask.shape)
     logp = F.log_softmax(policy_logits.float(), dim=-1)   # [B,T,V]
     logq = F.log_softmax(ref_logits.float(), dim=-1)      # [B,T,V]
     p = logp.exp()
