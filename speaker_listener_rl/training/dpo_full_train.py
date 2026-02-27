@@ -20,7 +20,7 @@ from utils.utils import generate_summary, jaccard_ngrams, make_prompt, set_globa
 from dataclasses import dataclass
 
 RANDOM_SEED = 42 #random seed for random initialized weights
-KL_CHECK = 2 #every 4 optimizer steps check the KL score
+KL_CHECK = 8 #every 8 optimizer steps check the KL score
 
 @dataclass
 class PairBatch:
@@ -207,6 +207,15 @@ def dpo_loss(policy, ref, batch, epoch, max_epochs, alpha0, alpha_k, *, beta, kl
         loss = loss + kl_weight * loss_kl
     else:
         loss = loss
+
+    def _check_finite(name, t):
+        if not torch.isfinite(t).all():
+            raise RuntimeError(f"{name} has NaN/Inf")
+
+    _check_finite("loss_dpo", loss)
+    if loss_kl is not None:
+        _check_finite("loss_kl", loss_kl)
+    _check_finite("loss_total", loss)
 
 
     metrics = {
