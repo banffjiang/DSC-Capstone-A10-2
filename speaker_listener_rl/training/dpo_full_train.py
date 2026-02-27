@@ -20,7 +20,7 @@ from utils.utils import generate_summary, jaccard_ngrams, make_prompt, set_globa
 from dataclasses import dataclass
 
 RANDOM_SEED = 42 #random seed for random initialized weights
-KL_CHECK = 4 #every 4 optimizer steps check the KL score
+KL_CHECK = 2 #every 4 optimizer steps check the KL score
 
 @dataclass
 class PairBatch:
@@ -151,8 +151,9 @@ def _anneal_alpha(epoch, max_epochs, alpha0, k):
 
 def kl_tokenwise(policy_logits, ref_logits, mask):
     #choses to use ref or policy for each tokens then computes
-    logp = F.log_softmax(policy_logits, dim=-1)   # [B,T,V]
-    logq = F.log_softmax(ref_logits, dim=-1)      # [B,T,V]
+    print(policy_logits.shape, ref_logits.shape, mask.shape)
+    logp = F.log_softmax(policy_logits.float(), dim=-1)   # [B,T,V]
+    logq = F.log_softmax(ref_logits.float(), dim=-1)      # [B,T,V]
     p = logp.exp()
     kl = (p * (logp - logq)).sum(dim=-1)          # [B,T]
     mask = mask.float()
