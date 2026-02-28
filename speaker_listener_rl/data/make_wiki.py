@@ -14,7 +14,7 @@ def clean_line(line: str) -> str:
     if not line:
         return ""
 
-    # Remove common wiki-ish markup / artifacts (keep it conservative)
+    # Remove common wiki-ish markup / artifacts
     line = re.sub(r"\[[^\]]*\]", " ", line)          # [brackets]
     line = re.sub(r"\{\{[^}]*\}\}", " ", line)       # {{templates}}
     line = re.sub(r"<[^>]*>", " ", line)             # <tags>
