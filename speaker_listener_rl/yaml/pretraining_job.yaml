@@ -35,7 +35,7 @@ spec:
         args:
           - |
             set -e
-            apt-get update && apt-get install -y git
+            apt-get update && apt-get install -y git && apt-get install -y curl unzip
             
             # Clean up if old repo exists and clone the repository
             rm -rf /workspace/repo  
@@ -47,7 +47,7 @@ spec:
             wandb login $WANDB_API_KEY
 
             curl -L --fail -o /data/train_100M.zip "https://osf.io/ywea7/download"
-            unzip -o /data/train_100M.zip -d /data
+            unzip -o /speaker_listener_rl/data/train_100M.zip -d /data
 
             python speaker_listener_rl/data/make_all_train_100M.py \
               --input_path /data/train_100M \
