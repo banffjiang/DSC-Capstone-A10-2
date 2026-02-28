@@ -3,14 +3,402 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>TeleSpeak | Redirecting</title>
-  <meta http-equiv="refresh" content="0; url=./public/" />
-  <link rel="canonical" href="./public/" />
-  <script>
-    window.location.replace("./public/");
-  </script>
+  <title>TeleSpeak | Project Website</title>
+  <meta name="description" content="TeleSpeak: Modeling Early Language Acquisition with Reinforcement Learning for Large Language Models" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Fraunces:opsz,wght@9..144,600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <p>Redirecting to <a href="./public/">the project website</a>.</p>
+  <nav class="topbar" aria-label="Primary">
+    <div class="topbar__inner">
+      <a class="brand" href="#top">TeleSpeak</a>
+      <div class="topbar__links">
+        <a href="#problem">Problem</a>
+        <a href="#approach">Approach</a>
+        <a href="#results">Results</a>
+        <a href="#charts">Charts</a>
+        <a href="#evaluation">Evaluation</a>
+        <a href="#artifacts">Artifacts</a>
+      </div>
+    </div>
+  </nav>
+
+  <header class="hero" id="top">
+    <div class="hero__inner">
+      <p class="eyebrow">DSC Capstone · RL + Linguistics</p>
+      <h1>TeleSpeak</h1>
+      <p class="subtitle">Modeling Early Language Acquisition with Reinforcement Learning for Large Language Models</p>
+      <p class="authors">Banff Jiang · Colin Wang · Longhao Lin · Alex Warstadt</p>
+      <div class="links">
+        <a href="https://github.com/banffjiang/DSC-Capstone-A10-2" target="_blank" rel="noreferrer">Code</a>
+        <a href="#charts">Charts</a>
+        <a href="#artifacts">Artifacts</a>
+        <a href="#references">References</a>
+      </div>
+      <div class="hero__grid">
+        <article class="hero-card hero-card--pitch">
+          <p class="hero-card__label">One-Screen Pitch</p>
+          <p>
+            TeleSpeak tests whether child-like telegraphic speech can emerge from
+            <strong>optimization under production constraints</strong> rather than from a hard-coded language bottleneck.
+            We train a speaker with preference learning and a decaying pressure toward shorter utterances, then measure whether concise,
+            meaning-preserving summaries become a stable strategy.
+          </p>
+        </article>
+        <article class="hero-card">
+          <p class="hero-card__label">Why It Matters</p>
+          <p>
+            The project connects BabyLM-style low-resource learning with a concrete cognitive hypothesis:
+            if short utterances are useful under limited capacity, reinforcement learning should recover them without manually scripting them.
+          </p>
+        </article>
+        <article class="hero-card">
+          <p class="hero-card__label">Target Reviewer</p>
+          <p>
+            This site is written for technical readers evaluating model design, dataset rigor, and whether the results would justify the child-language claim.
+          </p>
+        </article>
+      </div>
+    </div>
+    <div class="hero__glow" aria-hidden="true"></div>
+  </header>
+
+  <main>
+    <section class="panel metrics">
+      <article class="metric">
+        <span class="metric__label">Core Question</span>
+        <strong>Can length pressure alone induce telegraphic speech?</strong>
+      </article>
+      <article class="metric">
+        <span class="metric__label">Setup</span>
+        <strong>GPT-2 speaker + RoBERTa listener + DPO</strong>
+      </article>
+      <article class="metric">
+        <span class="metric__label">Status</span>
+        <strong>Pipeline built; final experiments pending</strong>
+      </article>
+    </section>
+
+    <section id="problem" class="panel grid2">
+      <article>
+        <h2>Problem Statement</h2>
+        <p>
+          Modern language models usually require much more data than human learners. BabyLM asks whether useful language behavior can be learned under strict token budgets,
+          but it does not by itself explain why early child speech is often short, content-heavy, and structurally incomplete.
+        </p>
+        <p>
+          TeleSpeak treats this as an optimization question: if speaking is expensive, do short utterances emerge because they preserve enough meaning at lower production cost?
+        </p>
+      </article>
+      <article>
+        <h2>Target User and Stakeholder</h2>
+        <p>
+          The immediate audience is researchers and mentors interested in cognitively motivated language modeling, efficient learning, and reinforcement-learning-based sequence training.
+          The broader stakeholder is anyone evaluating whether developmental language phenomena can be reproduced with transparent training objectives instead of hand-built rules.
+        </p>
+      </article>
+    </section>
+
+    <section id="scope" class="panel grid2">
+      <article>
+        <h2>Scope</h2>
+        <p>
+          We focus on a narrow, testable claim: whether a speaker optimized for semantic fidelity plus time-varying brevity pressure will move toward shorter outputs.
+          This project is about <strong>emergent production behavior</strong>, not full child-language acquisition.
+        </p>
+      </article>
+      <article>
+        <h2>Out of Scope</h2>
+        <p>
+          We are not claiming that the current model captures syntax development, multimodal grounding, caregiver interaction, or developmental timelines.
+          Those would require additional supervision, richer environments, and stronger behavioral evaluation than this capstone currently includes.
+        </p>
+      </article>
+    </section>
+
+    <section id="approach" class="panel">
+      <h2>Approach Summary</h2>
+      <p class="section-intro">
+        The system pairs a generator with a learned evaluator. The generator proposes multiple candidate summaries for the same passage.
+        The listener scores which candidate better preserves meaning, and DPO pushes the speaker toward the preferred candidate while a separate term rewards brevity early in training.
+      </p>
+      <div class="cards">
+        <article class="card">
+          <h3>Data</h3>
+          <p>Simple Wikipedia passages from the BabyLM-style setup, preprocessed to JSONL for training and analysis:</p>
+          <pre><code>{"id": int, "source": "simplewiki", "passage": str}</code></pre>
+        </article>
+        <article class="card">
+          <h3>Speaker</h3>
+          <p>GPT-2 generates candidate summaries with stochastic decoding so the preference pipeline can compare concise and verbose alternatives.</p>
+        </article>
+        <article class="card">
+          <h3>Listener</h3>
+          <p>RoBERTa-large provides semantic preference signals using BERTScore-style alignment, rewarding candidates that keep the source meaning intact.</p>
+        </article>
+        <article class="card">
+          <h3>Preference Filtering</h3>
+          <p>
+            Candidate pairs are diversity-filtered via 2-gram Jaccard similarity. Overly similar pairs are regenerated;
+            persistent near-duplicates are discarded.
+          </p>
+        </article>
+        <article class="card">
+          <h3>What We Built</h3>
+          <p>Data preprocessing, candidate generation, listener scoring, DPO training code, and experiment tracking are all assembled in this repo as a single end-to-end training workflow.</p>
+        </article>
+        <article class="card">
+          <h3>What We Reused</h3>
+          <p>We rely on BabyLM-style data framing, GPT-2 and RoBERTa checkpoints, BERTScore-style semantic comparison, and standard experiment logging tooling rather than building those foundations from scratch.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="objective" class="panel">
+      <h2>Training Objective</h2>
+      <p>We combine DPO preference logits with a decaying length advantage term:</p>
+      <pre><code>logits = beta * pref_logits + alpha(t) * len_adv
+L = -log(sigmoid(logits))
+
+pref_logits = (log pi_theta(y_c|x) - log pi_theta(y_r|x))
+            - (log pi_ref(y_c|x)   - log pi_ref(y_r|x))
+
+len_adv = (len_r - len_c) / (len_r + len_c + epsilon)
+alpha(t) = alpha_0 * exp(-k * t)</code></pre>
+      <p>
+        This design enforces short outputs early, then gradually prioritizes semantic preference learning as training proceeds.
+      </p>
+    </section>
+
+    <section id="data" class="panel grid2">
+      <article>
+        <h2>Dataset and Validity Notes</h2>
+        <p>
+          Current experiments use Simple Wikipedia passages converted into compact passage-level examples. The design goal is to hold semantics roughly constant while letting output length vary.
+        </p>
+        <ul class="bullet-list">
+          <li>Training source: Simple Wikipedia passages preprocessed into JSONL records.</li>
+          <li>Unit of supervision: preference pairs between two candidate summaries of the same passage.</li>
+          <li>Validity concern: semantic overlap metrics can overestimate quality when two weak candidates share surface vocabulary.</li>
+          <li>Leakage concern to track in final write-up: avoid evaluating on passages or templates that appear in preference construction.</li>
+        </ul>
+      </article>
+      <article>
+        <h2>Evaluation Plan</h2>
+        <p>
+          Final evaluation is not complete yet. The intended benchmark is whether the system can shorten outputs without collapsing semantic fidelity.
+        </p>
+        <ul class="bullet-list">
+          <li>Primary metrics: output length, semantic score, and pairwise preference accuracy.</li>
+          <li>Baselines: reference GPT-2 behavior without length pressure and ablations removing listener or decay schedule.</li>
+          <li>Interpretation rule: shorter is only meaningful if semantic retention stays competitive.</li>
+          <li>Current status: placeholders are shown below until the final sweep is run.</li>
+        </ul>
+      </article>
+    </section>
+
+    <section id="results" class="panel">
+      <div class="section-heading">
+        <div>
+          <h2>Results</h2>
+          <p class="section-intro">
+            Final quantitative claims are pending. This section is intentionally structured the way the completed evaluation will appear so reviewers can see exactly what evidence will be surfaced.
+          </p>
+        </div>
+        <span class="status-pill">Placeholder until final experiments</span>
+      </div>
+      <div class="results-grid">
+        <article class="insight-card">
+          <h3>Finding 1: Brevity vs Fidelity</h3>
+          <p>
+            Placeholder: report whether the decaying length penalty produces shorter summaries early in training without permanently degrading semantic retention.
+          </p>
+        </article>
+        <article class="insight-card">
+          <h3>Finding 2: Listener Value</h3>
+          <p>
+            Placeholder: compare DPO with and without listener-derived preferences to show whether semantic ranking improves beyond naive length minimization.
+          </p>
+        </article>
+        <article class="insight-card">
+          <h3>Finding 3: Emergent Telegraphic Style</h3>
+          <p>
+            Placeholder: inspect whether outputs become more content-word heavy and compressed in a way that resembles telegraphic speech rather than generic truncation.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section id="charts" class="panel">
+      <div class="section-heading">
+        <div>
+          <h2>Charts</h2>
+          <p class="section-intro">
+            This section is reserved for the two main training visuals we expect reviewers to inspect first: a perplexity evaluation chart and a training loss chart.
+          </p>
+        </div>
+        <span class="status-pill">Add final figures here</span>
+      </div>
+      <div class="chart-grid">
+        <article class="chart-card">
+          <div class="placeholder-figure chart-placeholder" aria-label="Perplexity chart placeholder">
+            <p>Perplexity Evaluation Chart</p>
+            <span>Recommended file: <code>figures/perplexity_eval.png</code></span>
+            <small>Use this to compare baseline, DPO-only, and DPO + length-pressure variants.</small>
+          </div>
+          <p class="caption">
+            Suggested caption: lower perplexity alone is not the goal; interpret it alongside semantic retention and output length so fluency gains are not confused with task success.
+          </p>
+        </article>
+        <article class="chart-card">
+          <div class="placeholder-figure chart-placeholder" aria-label="Loss chart placeholder">
+            <p>Training Loss Chart</p>
+            <span>Recommended file: <code>figures/loss_curve.png</code></span>
+            <small>Plot train and validation loss across steps, with important sweep settings noted in the caption.</small>
+          </div>
+          <p class="caption">
+            Suggested caption: use this chart to show optimization stability, whether decay scheduling causes sharp transitions, and which runs are worth discussing in the final results section.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section id="evaluation" class="panel grid2">
+      <article>
+        <h2>Placeholder Evaluation Table</h2>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Model Variant</th>
+              <th>Avg. Length</th>
+              <th>Semantic Score</th>
+              <th>Preference Win Rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>GPT-2 baseline</td>
+              <td>TBD</td>
+              <td>TBD</td>
+              <td>TBD</td>
+            </tr>
+            <tr>
+              <td>DPO only</td>
+              <td>TBD</td>
+              <td>TBD</td>
+              <td>TBD</td>
+            </tr>
+            <tr>
+              <td>DPO + decaying length term</td>
+              <td>TBD</td>
+              <td>TBD</td>
+              <td>TBD</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="caption">
+          Planned comparison table. Final numbers will only be interpreted as positive if shorter outputs maintain competitive semantic quality.
+        </p>
+      </article>
+      <article class="placeholder-figure" aria-label="Result figure placeholder">
+        <p>Figure Placeholder</p>
+        <span>Add training curves, ablations, or example generations here.</span>
+        <small>Recommended: one plot for length trajectory and one plot for semantic retention.</small>
+      </article>
+    </section>
+
+    <section id="examples" class="panel grid2">
+      <article>
+        <h2>Example Output Format</h2>
+        <div class="example-block">
+          <p><strong>Input passage</strong></p>
+          <p>A Simple Wikipedia passage describing an event or concept.</p>
+          <p><strong>Verbose candidate</strong></p>
+          <p>Placeholder candidate preserving most content with longer phrasing.</p>
+          <p><strong>Concise candidate</strong></p>
+          <p>Placeholder candidate using shorter, denser wording.</p>
+        </div>
+      </article>
+      <article>
+        <h2>How to Read the Results</h2>
+        <p>
+          A lower output length by itself is not success. We will treat improvements as meaningful only when three conditions hold:
+        </p>
+        <ul class="bullet-list">
+          <li>The shorter candidate keeps high semantic alignment with the source.</li>
+          <li>The behavior is consistent across passages rather than isolated examples.</li>
+          <li>The effect survives ablations removing the listener or the decay schedule.</li>
+        </ul>
+      </article>
+    </section>
+
+    <section id="limitations" class="panel grid2">
+      <article>
+        <h2>Limitations and Failure Modes</h2>
+        <ul class="bullet-list">
+          <li>Shorter outputs may arise from generic truncation instead of genuinely child-like content selection.</li>
+          <li>BERTScore-style signals do not fully capture pragmatic success or grammaticality.</li>
+          <li>Simple Wikipedia is cleaner and more adult-like than real caregiver-child interaction.</li>
+          <li>The current setup does not model turn-taking, grounding, or developmental progression over time.</li>
+        </ul>
+      </article>
+      <article>
+        <h2>Iteration and Next Steps</h2>
+        <ul class="bullet-list">
+          <li>Early phase: establish the speaker-listener preference pipeline and stable DPO training.</li>
+          <li>Current phase: run sweeps over decay strength, preference filtering, and decoding settings.</li>
+          <li>Next phase: replace placeholders with final plots, ablations, and qualitative examples.</li>
+          <li>Longer-term extension: test richer datasets and more behaviorally grounded evaluation.</li>
+        </ul>
+      </article>
+    </section>
+
+    <section id="artifacts" class="panel grid2">
+      <article>
+        <h2>Artifacts and Reproducibility</h2>
+        <ul class="bullet-list">
+          <li><a href="https://github.com/banffjiang/DSC-Capstone-A10-2" target="_blank" rel="noreferrer">Project repository</a></li>
+          <li><a href="https://github.com/banffjiang/DSC-Capstone-A10-2/blob/website/speaker_listener_rl/training/dpo_with_listener_wandb.py" target="_blank" rel="noreferrer">Training entry point</a></li>
+          <li><a href="https://github.com/banffjiang/DSC-Capstone-A10-2/blob/website/speaker_listener_rl/scripts/run_speaker_wiki.py" target="_blank" rel="noreferrer">Speaker generation script</a></li>
+          <li><a href="https://github.com/banffjiang/DSC-Capstone-A10-2/blob/website/speaker_listener_rl/yaml/dpo_job.yaml" target="_blank" rel="noreferrer">Job configuration</a></li>
+        </ul>
+      </article>
+      <article>
+        <h2>Run Path</h2>
+        <pre><code>pip install -r requirements.txt
+python speaker_listener_rl/scripts/run_speaker_wiki.py
+python speaker_listener_rl/training/dpo_with_listener_wandb.py</code></pre>
+        <p class="caption">
+          These commands show the intended workflow. Final deployment artifacts and experiment outputs will be linked here after the evaluation sweep completes.
+        </p>
+      </article>
+    </section>
+
+    <section id="conclusion" class="panel">
+      <h2>Takeaway</h2>
+      <p>
+        TeleSpeak is a focused testbed for asking whether telegraphic-style language can emerge from a simple tradeoff between semantic success and production cost.
+        The final judgment will depend on whether the model gets shorter <em>without</em> becoming empty, repetitive, or semantically weak.
+      </p>
+    </section>
+
+    <section id="references" class="panel">
+      <h2>References</h2>
+      <ol>
+        <li>BabyLM Challenge (shared task datasets and constraints).</li>
+        <li>Rafailov et al. (2023). Direct Preference Optimization.</li>
+        <li>Zhang et al. (2020). BERTScore: Evaluating text generation with contextual embeddings.</li>
+        <li>Padovani et al. (2025). Reinforcement-learning approaches in BabyLM submissions.</li>
+        <li>Stopler et al. (2025). Text-game style RL framing for language learning.</li>
+        <li>Lazaridou et al. (2016). Multi-agent communication and reference games.</li>
+      </ol>
+    </section>
+  </main>
+
+  <footer>
+    <p>TeleSpeak Project Website · Built for external technical review</p>
+  </footer>
 </body>
 </html>
