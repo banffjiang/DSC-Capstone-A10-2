@@ -20,9 +20,9 @@ def jaccard_ngrams(a, b, n=2):
 
 def make_prompt(source_text):
     return (
-        "Keywords only.\n"
-        f"{source_text}\n"
-        "Summary:"
+        "Keywords summary.\n"
+        f"Text: {source_text}\n"
+        "Output:"
     )
 
 @torch.inference_mode()

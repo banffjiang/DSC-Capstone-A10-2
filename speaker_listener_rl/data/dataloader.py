@@ -1,33 +1,12 @@
-import json
-from typing import Iterator, Dict, Any
+from torch.utils.data import Dataset
 
-class PassageQuestionLoader:
-    """
-    Simple dataloader that yields (passage, question) pairs
-    from data/passage_question_train.jsonl
-    """
+class TextOnlyDataset(Dataset):
+    def __init__(self, examples, key="passage"):
+        self.examples = examples
+        self.key = key
 
-    def __init__(self, path: str = "speaker_listener_rl/data/passage_question_train.jsonl"):
-        self.path = path
+    def __len__(self):
+        return len(self.examples)
 
-    def __iter__(self) -> Iterator[Dict[str, Any]]:
-        """
-        Yields:
-            {
-              "id": int,
-              "passage": str,
-              "question": str,
-              "source": str (optional)
-            }
-        """
-        with open(self.path, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                ex = json.loads(line)
-
-                if "passage" not in ex or "question" not in ex:
-                    raise ValueError(f"Missing keys in example: {ex}")
-
-                yield ex
+    def __getitem__(self, idx):
+        return self.examples[idx][self.key]

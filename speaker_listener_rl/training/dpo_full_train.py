@@ -1,4 +1,5 @@
 import argparse
+from html import parser
 import os
 import shutil
 import sys
@@ -301,6 +302,7 @@ def quick_generate_sample(
 def train_dpo(
         *,
         policy_model,
+        init_ckpt,
         input_path,
         output_path,
         epochs, 
@@ -357,6 +359,7 @@ def train_dpo(
             name=wandb_run_name,
             config={
                 "policy_model": policy_model,
+                "init_ckpt": init_ckpt,
                 "epochs": epochs,
                 "batch_size": batch_size,
                 "grad_accum": grad_accum,
@@ -413,16 +416,21 @@ def train_dpo(
         print(f"[WandB] Initialized project: {wandb_project}, run: {wandb_run_name}")
 
     try:
-    
-        tokenizer = AutoTokenizer.from_pretrained(policy_model)
-        if tokenizer.pad_token_id is None:
+        if init_ckpt is not None:
+            #Load from Stage1 checkpoint
+            tokenizer = AutoTokenizer.from_pretrained(init_ckpt)
+            policy = AutoModelForCausalLM.from_pretrained(init_ckpt).to(device)
+            reference = AutoModelForCausalLM.from_pretrained(init_ckpt).to(device)
+        else:
+            #random init from model config
+            tokenizer = AutoTokenizer.from_pretrained(policy_model)
+            config = AutoConfig.from_pretrained(policy_model)
+            policy = AutoModelForCausalLM.from_config(config).to(device)
+            reference = AutoModelForCausalLM.from_config(config).to(device)
+
+        if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
 
-        print(f"[Model] Initializing policy model from config (random weights): {policy_model}")
-        config = AutoConfig.from_pretrained(policy_model)
-        policy = AutoModelForCausalLM.from_config(config).to(device)
-
-        reference = copy.deepcopy(policy).to(device)
         reference.eval()
         for p in reference.parameters():
             p.requires_grad_(False)
@@ -864,7 +872,8 @@ def parse_args():
     parser = argparse.ArgumentParser()
     
     # Model arguments
-    parser.add_argument("--policy_model", type=str, required=True, default='gpt2')
+    parser.add_argument("--policy_model", type=str, default="gpt2")
+    parser.add_argument("--init_ckpt", type=str, default=None)
     parser.add_argument("--input_path", type=str, required=True)
     parser.add_argument("--output_path", type=str, required=True)
     
@@ -931,6 +940,7 @@ def main():
 
     train_dpo(
         policy_model=args.policy_model,
+        init_ckpt=args.init_ckpt,
         input_path=args.input_path,
         output_path=args.output_path,
         epochs=args.epochs,
