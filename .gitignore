@@ -1,5 +1,7 @@
 #Ignore model checkpoints
 speaker_listener_rl/training/output/
+speaker_listener_rl/data/train_100M/
+speaker_listener_rl/data/train_100m_passages.jsonl
 
 pycache/
 *.py[cod]
