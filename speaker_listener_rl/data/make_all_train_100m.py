@@ -72,7 +72,7 @@ def build_dataset(
     train_dir: Path,
     output_path: Path,
     min_words: int,
-    max_words: int,
+    max_words: Optional[int],
     target_passage_words: int,
     max_instances: Optional[int],
 ) -> int:
@@ -89,7 +89,9 @@ def build_dataset(
 
                     for passage in chunk_sentences(line, target_words=target_passage_words):
                         wc = len(passage.split())
-                        if wc < min_words or wc > max_words:
+                        if wc < min_words:
+                            continue
+                        if max_words is not None and wc > max_words:
                             continue
 
                         ex = {"id": n, "source": source, "passage": passage}
@@ -116,7 +118,7 @@ def parse_args() -> argparse.Namespace:
         help="Output JSONL path.",
     )
     parser.add_argument("--min_words", type=int, default=20)
-    parser.add_argument("--max_words", type=int, default=120)
+    parser.add_argument("--max_words", type=int, default=None)
     parser.add_argument("--target_passage_words", type=int, default=80)
     parser.add_argument("--max_instances", type=int, default=None)
     return parser.parse_args()

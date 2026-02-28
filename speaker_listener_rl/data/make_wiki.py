@@ -61,7 +61,7 @@ def chunk_sentences(text: str, target_words: int) -> list[str]:
 
 def main(
     min_words: int = 20,
-    max_words: int = 120,
+    max_words: Optional[int] = None,
     target_passage_words: int = 80,
     max_instances: Optional[int] = None,
 ):
@@ -82,7 +82,9 @@ def main(
             # Turn each cleaned line into 1+ passages (in case lines are long)
             for passage in chunk_sentences(line, target_words=target_passage_words):
                 wc = len(passage.split())
-                if wc < min_words or wc > max_words:
+                if wc < min_words:
+                    continue
+                if max_words is not None and wc > max_words:
                     continue
 
                 ex = {"id": n, "source": "simplewiki", "passage": passage}

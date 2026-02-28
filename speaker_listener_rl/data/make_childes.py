@@ -1,6 +1,7 @@
 import json
 import re
 import os
+from typing import Optional
 
 # IN_PATH = "../speaker_listener_rl/data/train_10M/childes.train"
 # OUT_PATH = "speaker_listener_rl/data/childes_utterances.jsonl"
@@ -28,7 +29,7 @@ def clean_line(line: str) -> str:
     return line
 
 
-def main(max_lines=5000, min_words=2, max_words=30):
+def main(max_lines=5000, min_words=2, max_words: Optional[int] = None):
     n = 0
     with open(IN_PATH, "r", encoding="utf-8") as f, open(OUT_PATH, "w", encoding="utf-8") as out:
         for line in f:
@@ -37,7 +38,9 @@ def main(max_lines=5000, min_words=2, max_words=30):
                 continue
 
             wc = len(line.split())
-            if wc < min_words or wc > max_words:
+            if wc < min_words:
+                continue
+            if max_words is not None and wc > max_words:
                 continue
 
             ex = {"id": n, "source": "childes", "utterance": line}

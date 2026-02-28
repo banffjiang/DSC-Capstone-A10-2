@@ -1,5 +1,6 @@
 import json
 import os
+from typing import Optional
 
 from make_wiki import IN_PATH, chunk_sentences, clean_line
 
@@ -10,7 +11,7 @@ OUT_PATH = os.path.join(BASE_DIR, "simple_wiki_passages_8k.jsonl")
 
 def main(
     min_words: int = 20,
-    max_words: int = 120,
+    max_words: Optional[int] = None,
     target_passage_words: int = 80,
     max_instances: int = 8000,
 ):
@@ -28,7 +29,9 @@ def main(
 
             for passage in chunk_sentences(line, target_words=target_passage_words):
                 wc = len(passage.split())
-                if wc < min_words or wc > max_words:
+                if wc < min_words:
+                    continue
+                if max_words is not None and wc > max_words:
                     continue
 
                 ex = {"id": n, "source": "simplewiki", "passage": passage}
