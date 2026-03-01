@@ -4,9 +4,13 @@ import math, torch
 from transformers import  AutoTokenizer, AutoConfig, AutoModelForCausalLM, get_cosine_schedule_with_warmup #lr scheduler
 from torch.utils.data import DataLoader
 import re
+import sys
+from pathlib import Path
 
 import argparse
 import wandb
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from data.dataloader_wiki import SimpleWikiPassageLoader
 from data.dataloader import TextOnlyDataset
