@@ -365,8 +365,8 @@ def main():
         payload = json.load(f)
     idf = payload["idf"]
 
-    text = TextOnlyDataset(SimpleWikiPassageLoader(path=args.train_jsonl, limit=None))
-    wiki_text = TextOnlyDataset(SimpleWikiPassageLoader(path="data/simple_wiki_passages.jsonl", limit=None))
+    text = TextOnlyDataset(list(SimpleWikiPassageLoader(path=args.train_jsonl, limit=None)))
+    wiki_text = TextOnlyDataset(list(SimpleWikiPassageLoader(path="data/simple_wiki_passages.jsonl", limit=None)))
     train_dataset, test_dataset = split_train_test_examples(wiki_text, test_size=args.test_size, split_seed=RANDOM_SEED)
 
     probe_prompts = build_probe_prompts(wiki_text, n=3)
