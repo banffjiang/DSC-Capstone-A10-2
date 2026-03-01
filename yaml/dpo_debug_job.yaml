@@ -67,7 +67,7 @@ spec:
               --temperature 0.7 \
               --top_p 0.9 \
               --repetition_penalty 1.1 \
-              --kl_weight 0.02
+              --kl_weight 0.00
 
             echo "DPO debug outputs:"
             ls -lah /workspace/checkpoints/dpo_debug_smoke || true
