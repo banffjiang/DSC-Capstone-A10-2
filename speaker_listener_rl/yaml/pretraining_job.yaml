@@ -46,16 +46,16 @@ spec:
             
             wandb login $WANDB_API_KEY
 
-            curl -L --fail -o /data/train_100M.zip "https://osf.io/ywea7/download"
-            unzip -o /speaker_listener_rl/data/train_100M.zip -d /data
+            curl -L --fail -o speaker_listener_rl/data/train_100M.zip "https://osf.io/ywea7/download"
+            unzip -o speaker_listener_rl/data/train_100M.zip -d /data
 
-            python speaker_listener_rl/data/make_all_train_100M.py \
-              --input_path /data/train_100M \
-              --output_path /data/train_100m_passages.jsonl
+            python speaker_listener_rl/data/make_all_train_100m.py \
+              --train_dir data/train_100M \
+              --output_path data/train_100m_passages.jsonl
 
             python speaker_listener_rl/data/build_tf_idf.py \
-              --input /data/simple_wiki_passages.jsonl \
-              --out /data/tfidf_wiki.json
+              --wiki_jsonl data/simple_wiki_passages.jsonl \
+              --out data/tfidf_wiki.json
             
             python speaker_listener_rl/training/pretraining_dpo.py \
               --wandb_project dpo-pretraining \
