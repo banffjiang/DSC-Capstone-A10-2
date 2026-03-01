@@ -54,7 +54,7 @@ def build_probe_prompts(dataset, *, n=3):
     prompts = []
     for i in range(min(n, len(dataset))):
         ex = dataset[i]
-        passage = ex["passage"] if isinstance(ex, dict) else ex
+        passage = ex["passage"]
         prompts.append(make_prompt(passage))
     return prompts
 
@@ -132,10 +132,8 @@ def pre_training(
     model = AutoModelForCausalLM.from_config(config).to(device)
     model.train()
 
-    text = text_dataset if text_dataset is not None else TextOnlyDataset(SimpleWikiPassageLoader(path=input, limit=None))
-
     dl = DataLoader(
-        text,
+        TextOnlyDataset(text_dataset),
         batch_size=batch_size,
         shuffle=False,
         collate_fn=lambda batch_texts: collate_lm(tokenizer, batch_texts, max_length=block_size),
@@ -161,6 +159,18 @@ def pre_training(
             if step % 100 == 0:
                 print({'step:': step, 'loss': float(loss)})
 
+                if wandb.run is not None:
+                    wandb.log(
+                        {
+                            "stage": "pretrain",
+                            "pretrain/loss": float(loss.item()),
+                            "pretrain/lr": float(lr_scheduler.get_last_lr()[0]),
+                            "pretrain/step": step,
+                            "pretrain/epoch": epoch,
+                        },
+                        step=step,
+                    )
+
                 samples = []
                 for j, prompt in enumerate(probe_prompts):
                     gen = quick_generate_sample(
@@ -174,10 +184,11 @@ def pre_training(
                         no_repeat_ngram_size=3,
                     )
                     samples.append((j, gen))
-
-                print("\n=== [SFT] samples @ step", step, "===\n")
-                for j, gen in samples:
-                    print(f"[probe {j}]\n{gen}\n")
+                    
+                if step % 500 == 0:
+                    print("\n=== Pre-training samples @ step", step, "===\n")
+                    for j, gen in samples:
+                        print(f"[probe {j}]\n{gen}\n")
 
             if step >= total_steps:
                 # saves model and tokenizer will be loaded in the next stage
@@ -365,8 +376,8 @@ def main():
         payload = json.load(f)
     idf = payload["idf"]
 
-    text = TextOnlyDataset(list(SimpleWikiPassageLoader(path=args.train_jsonl, limit=None)))
-    wiki_text = TextOnlyDataset(list(SimpleWikiPassageLoader(path="data/simple_wiki_passages.jsonl", limit=None)))
+    text = SimpleWikiPassageLoader(path=args.train_jsonl, limit=None)
+    wiki_text = SimpleWikiPassageLoader(path="data/simple_wiki_passages.jsonl", limit=None)
     train_dataset, test_dataset = split_train_test_examples(wiki_text, test_size=args.test_size, split_seed=RANDOM_SEED)
 
     probe_prompts = build_probe_prompts(wiki_text, n=3)
