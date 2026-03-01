@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 from typing import Iterable, Optional
 
-from make_wiki import chunk_sentences
+from data.make_wiki import chunk_sentences
 
 
 BASE_DIR = Path(__file__).resolve().parent

@@ -16,7 +16,7 @@ from data.dataloader_wiki import SimpleWikiPassageLoader
 from data.dataloader import TextOnlyDataset
 from data.build_tf_idf import tokens_set
 from listener.listener.bertscore_listener import BERTScoreListener
-from data import dataloader
+
 from utils.utils import generate_summary, jaccard_ngrams, make_prompt, set_global_seed
 
 RANDOM_SEED = 42 #for reproducibility
