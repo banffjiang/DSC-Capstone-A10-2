@@ -63,9 +63,9 @@ spec:
               --warmup_steps 200 \
               --total_steps 5000 \
 
-            python -m training.dpo_full_train_stage2.py \
-              --init-ckpt  \
-              --input_path data/simple_wiki_passages_8k.jsonl \
+            python -m training.dpo_full_train_stage2 \
+              --init_ckpt /workspace/repo/stage1_sft_ckpt \
+              --input_path data/simple_wiki_passages.jsonl \
               --output_path /workspace/checkpoints/dpo_debug_smoke \
               --epochs 1 \
               --batch_size 2 \
@@ -84,12 +84,7 @@ spec:
               --top_p 0.9 \
               --repetition_penalty 1.1 \
               --no_repeat_ngram_size 0 \
-              --kl_weight 0.0 \
-              --gen_warmup_optimizer_steps 50 \
-              --gen_warmup_temperature 0.7 \
-              --gen_warmup_top_p 0.9 \
-              --gen_warmup_max_new_tokens 16 \
-              --min_gen_tokens 4
+              --kl_weight 0.02
             
             echo "checkpoints saved to /workspace/checkpoints"
             ls -lh /workspace/checkpoints/
