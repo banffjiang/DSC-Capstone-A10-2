@@ -6,7 +6,6 @@ from typing import Iterable, Optional
 
 from make_wiki import chunk_sentences
 
-
 BASE_DIR = Path(__file__).resolve().parent
 TRAIN_DIR = BASE_DIR / "train_100M"
 DEFAULT_OUT_PATH = BASE_DIR / "train_100m_passages.jsonl"
