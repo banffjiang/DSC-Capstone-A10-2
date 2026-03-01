@@ -50,9 +50,7 @@ spec:
 
             unzip -o data/train_100m_passages.zip -d data
 
-            sed -i 's/^from dataloader_wiki import /from data.dataloader_wiki import /' data/build_tf_idf.py
-
-            python -m data.build_tf_idf.py \
+            python -m data.build_tf_idf \
               --wiki_jsonl data/simple_wiki_passages.jsonl \
               --out data/tfidf_wiki.json
             

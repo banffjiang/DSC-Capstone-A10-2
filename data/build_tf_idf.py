@@ -5,7 +5,7 @@ import os
 import re
 from collections import Counter
 
-from dataloader_wiki import SimpleWikiPassageLoader
+from .dataloader_wiki import SimpleWikiPassageLoader
 
 TOKEN_RE = re.compile(r"[a-z0-9]+")  # lowercase only (we lowercase input)
 
