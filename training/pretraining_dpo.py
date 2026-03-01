@@ -274,9 +274,9 @@ def train_sft(
     model,
     tokenizer,
     train_dataset,
+    eval_dataset,
     idf,
     optimizer,
-    scheduler,
     device,
     probe_prompts=None,
     *,
@@ -294,6 +294,13 @@ def train_sft(
         collate_fn=lambda b: collate_sft(b, tokenizer, idf, block_size=block_size, top_k=top_k),
     )
 
+    eval_loader = DataLoader(
+        eval_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        collate_fn=lambda b: collate_sft(b, tokenizer, idf, block_size=block_size, top_k=top_k),
+    )
+
     global_step = 0
     for epoch in range(num_epochs):
         for batch in train_loader:
@@ -305,8 +312,6 @@ def train_sft(
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
 
             optimizer.step()
-            if scheduler is not None:
-                scheduler.step()
             optimizer.zero_grad(set_to_none=True)
 
             if global_step % 100 == 0:
@@ -327,8 +332,8 @@ def train_sft(
                 print("\n=== [SFT] samples @ step", global_step, "===\n")
                 for j, gen in samples:
                     print(f"[probe {j}]\n{gen}\n")
-
-                lr = scheduler.get_last_lr()[0] if scheduler is not None else optimizer.param_groups[0]["lr"]
+                
+                lr = optimizer.param_groups[0]["lr"]
                 print({"epoch": epoch, "step": global_step, "loss": float(loss), "lr": lr})
                 if wandb.run is not None:
                     wandb.log(
@@ -342,7 +347,7 @@ def train_sft(
                         step=step_offset + global_step,
                     )
                 
-                if global_step % 250 == 0:
+                if global_step % 500 == 0:
                     ex = train_dataset[0]
                     src = ex["passage"]
                     prompt = make_prompt(src)
@@ -364,6 +369,27 @@ def train_sft(
                     print("TFIDF TARGET:", target)
                     print("MODEL OUT:", model_out)
                     print()
+
+            if global_step % 500:
+                model.eval()
+                total = 0.0
+                nb = 0
+                with torch.no_grad():
+                    for ebatch in eval_loader:
+                        ebatch = {k: v.to(device) for k, v in ebatch.items()}
+                        eloss = model(**ebatch).loss
+                        total += float(eloss.item())
+                        nb += 1
+                eval_loss = total / max(1, nb)
+                model.train()
+
+                print({"epoch": epoch, "step": global_step, "eval_loss": eval_loss})
+                if wandb.run is not None:
+                    wandb.log(
+                        {"stage": "sft", "sft/eval_loss": eval_loss},
+                        step=step_offset + global_step,
+                    )
+
 
 ####################################################################################################################
 # Stage 2: Training dpo with nll steps to replicate telegraphic speech
@@ -423,7 +449,7 @@ def main():
         batch_size=args.batch_size,
         lr=args.lr,
         warmup_steps=args.warmup_steps,
-        total_steps=30000,
+        total_steps=20000,
         probe_prompts=probe_prompts,
         device=device,
     )
@@ -446,6 +472,7 @@ def main():
         model=model,
         tokenizer=tokenizer,
         train_dataset=train_dataset,
+        eval_dataset=test_dataset,
         idf=idf,
         optimizer=optimizer,
         scheduler=scheduler,
