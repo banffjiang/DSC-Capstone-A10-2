@@ -355,13 +355,11 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     set_global_seed(RANDOM_SEED)
 
-    if args.wandb_mode != "disabled":
-        wandb.init(
-            project=args.wandb_project,
-            name=args.wandb_run_name,
-            mode=args.wandb_mode,
-            config=vars(args),
-        )
+    wandb.init(
+        project=args.wandb_project,
+        name=args.wandb_run_name,
+        config=vars(args),
+    )
 
     with open(args.idf_json, "r") as f:
         payload = json.load(f)
