@@ -47,7 +47,7 @@ spec:
             wandb login $WANDB_API_KEY
 
             curl -L --fail -o data/train_100M.zip "https://osf.io/ywea7/download"
-            unzip -o data/train_100M.zip -d /data
+            unzip -o data/train_100M.zip -d data
 
             python data/make_all_train_100m.py \
               --train_dir data/train_100M \
