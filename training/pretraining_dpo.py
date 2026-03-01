@@ -194,7 +194,7 @@ def pre_training(
                 # saves model and tokenizer will be loaded in the next stage
                 model.save_pretrained(output_dir)
                 tokenizer.save_pretrained(output_dir)
-                return
+                return step
 
 ####################################################################################################################
 # Stage 1: training model to produce summaries that will make dpo work on being able to compare
@@ -261,7 +261,16 @@ def collate_sft(batch, tokenizer, idf, block_size=128, top_k=8):
 
     return {"input_ids": input_ids, "attention_mask": attention_mask, "labels": labels}
 
+#helper to print out the sample for tfidf target
+def quick_tfidf_sample(dataset, idf, *, idx=0, top_k=8):
+    ex = dataset[idx]
+    src = ex["passage"]
+    prompt = make_prompt(src)
+    target = tfidf_target(src, idf, top_k=top_k)
+    return src, prompt, target
+
 def train_sft(
+    step_offset,
     model,
     tokenizer,
     train_dataset,
@@ -330,8 +339,31 @@ def train_sft(
                             "sft/epoch": epoch,
                             "sft/step": global_step,
                         },
-                        step=global_step,
+                        step=step_offset + global_step,
                     )
+                
+                if global_step % 250 == 0:
+                    ex = train_dataset[0]
+                    src = ex["passage"]
+                    prompt = make_prompt(src)
+                    target = tfidf_target(src, idf, top_k=top_k)
+
+                    model_out = quick_generate_sample(
+                        model,
+                        tokenizer,
+                        prompt,
+                        top_p=0.8,                # tighter decoding for more stable diagnostics
+                        temperature=0.7,
+                        max_new_tokens=24,
+                        repetition_penalty=1.1,
+                        no_repeat_ngram_size=3,
+                    )
+
+                    print("\n=== [TFIDF DEBUG] step", global_step, "===\n")
+                    print("SRC (first 200):", src[:200])
+                    print("TFIDF TARGET:", target)
+                    print("MODEL OUT:", model_out)
+                    print()
 
 ####################################################################################################################
 # Stage 2: Training dpo with nll steps to replicate telegraphic speech
@@ -382,7 +414,7 @@ def main():
 
     probe_prompts = build_probe_prompts(wiki_text, n=3)
 
-    pre_training(
+    pretrain_steps = pre_training(
         text_dataset=text,
         output_dir="stage0_ckpt",
         input=args.train_jsonl,
@@ -391,7 +423,7 @@ def main():
         batch_size=args.batch_size,
         lr=args.lr,
         warmup_steps=args.warmup_steps,
-        total_steps=10000,
+        total_steps=30000,
         probe_prompts=probe_prompts,
         device=device,
     )
@@ -410,6 +442,7 @@ def main():
     )
 
     train_sft(
+        pretrain_steps,
         model=model,
         tokenizer=tokenizer,
         train_dataset=train_dataset,
