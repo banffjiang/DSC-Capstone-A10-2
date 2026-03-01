@@ -184,7 +184,7 @@ def pre_training(
                         no_repeat_ngram_size=3,
                     )
                     samples.append((j, gen))
-                    
+
                 if step % 500 == 0:
                     print("\n=== Pre-training samples @ step", step, "===\n")
                     for j, gen in samples:
@@ -376,8 +376,8 @@ def main():
         payload = json.load(f)
     idf = payload["idf"]
 
-    text = SimpleWikiPassageLoader(path=args.train_jsonl, limit=None)
-    wiki_text = SimpleWikiPassageLoader(path="data/simple_wiki_passages.jsonl", limit=None)
+    text = list(SimpleWikiPassageLoader(path=args.train_jsonl, limit=None))
+    wiki_text = list(SimpleWikiPassageLoader(path="data/simple_wiki_passages.jsonl", limit=None))
     train_dataset, test_dataset = split_train_test_examples(wiki_text, test_size=args.test_size, split_seed=RANDOM_SEED)
 
     probe_prompts = build_probe_prompts(wiki_text, n=3)
