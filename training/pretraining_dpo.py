@@ -347,7 +347,6 @@ def parse_args():
     # Wandb arguments
     parser.add_argument("--wandb_project", type=str, default=None)
     parser.add_argument("--wandb_run_name", type=str, default=None)
-    parser.add_argument("--wandb_mode", type=str, default="disabled", choices=["online", "offline", "disabled"])
 
     return parser.parse_args()
 

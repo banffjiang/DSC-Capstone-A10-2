@@ -54,16 +54,14 @@ spec:
               --wiki_jsonl data/simple_wiki_passages.jsonl \
               --out data/tfidf_wiki.json
             
-            python training/pretraining_dpo.py \
-              --wandb_project dpo-pretraining \
-              --wandb_run_name pretraining-run-$(date +%Y%m%d-%H%M) \
-              --policy_model gpt2 \
-              --input_path data/simple_wiki_passages.jsonl \
-              --output_path /workspace/checkpoints \
-              --epochs 3 \
+            python -m training.pretraining_dpo \
+              --idf_json data/tfidf_wiki.json \
+              --train_jsonl data/train_100m_passages.jsonl \
               --batch_size 16 \
-              --grad_accum 8 \
-              --lr 1e-5
+              --epochs 3 \
+              --lr 1e-4 \
+              --warmup_steps 200 \
+              --total_steps 5000 \
             
             echo "checkpoints saved to /workspace/checkpoints"
             ls -lh /workspace/checkpoints/
