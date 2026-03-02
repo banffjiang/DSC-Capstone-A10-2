@@ -49,25 +49,26 @@ spec:
             # Disables NLL mixing and KL to isolate "does DPO pipeline run and step?"
             python -m training.dpo_full_train_stage2 \
               --policy_model gpt2 \
-              --reference_model gpt2 \
               --input_path data/simple_wiki_passages_8k.jsonl \
               --output_path /workspace/checkpoints/dpo_debug_kl \
-              --epochs 1 \
-              --batch_size 2 \
-              --grad_accum 1 \
+              --epochs 5 \
+              --batch_size 16 \
+              --grad_accum 8 \
               --lr 5e-7 \
               --max_length 256 \
               --nll_warmup_steps 0 \
-              --nll_steps_per_cycle 0 \
+              --nll_steps_per_cycle 2 \
               --dpo_steps_per_cycle 1 \
-              --score_gap_min 0.0 \
+              --score_gap_min 0.01 \
               --max_pair_similarity 0.99 \
-              --max_resample_tries 0 \
+              --max_resample_tries 2 \
               --max_new_tokens 16 \
               --temperature 0.7 \
               --top_p 0.9 \
               --repetition_penalty 1.1 \
-              --kl_weight 0.00
+              --kl_weight 0.02 \
+              --wandb_project dpo-training \
+              --wandb_run_name dpo-debug
 
             echo "DPO debug outputs:"
             ls -lah /workspace/checkpoints/dpo_debug_smoke || true
@@ -75,8 +76,12 @@ spec:
         env:
         - name: PYTHONPATH
           value: /workspace/repo
+        - name: WANDB_API_KEY
+          value: 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
+        - name: WANDB_PROJECT
+          value: "dpo-training"
         - name: WANDB_MODE
-          value: "disabled"
+          value: "online"
         - name: HF_HOME
           value: /workspace/.cache/huggingface
         - name: HF_DATASETS_CACHE

@@ -370,7 +370,7 @@ def train_sft(
                     print("MODEL OUT:", model_out)
                     print()
 
-            if global_step % 500:
+            if global_step % 500 == 0:
                 model.eval()
                 total = 0.0
                 nb = 0
@@ -440,19 +440,19 @@ def main():
 
     probe_prompts = build_probe_prompts(wiki_text, n=3)
 
-    pretrain_steps = pre_training(
-        text_dataset=text,
-        output_dir="/workspace/checkpoints/stage0_ckpt",
-        input=args.train_jsonl,
-        model_name="gpt2",
-        block_size=args.block_size,
-        batch_size=args.batch_size,
-        lr=args.lr,
-        warmup_steps=args.warmup_steps,
-        total_steps=20000,
-        probe_prompts=probe_prompts,
-        device=device,
-    )
+    # pretrain_steps = pre_training(
+    #     text_dataset=text,
+    #     output_dir="/workspace/checkpoints/stage0_ckpt",
+    #     input=args.train_jsonl,
+    #     model_name="gpt2",
+    #     block_size=args.block_size,
+    #     batch_size=args.batch_size,
+    #     lr=args.lr,
+    #     warmup_steps=args.warmup_steps,
+    #     total_steps=20000,
+    #     probe_prompts=probe_prompts,
+    #     device=device,
+    # )
 
     tokenizer = AutoTokenizer.from_pretrained("/workspace/checkpoints/stage0_ckpt")
     if tokenizer.pad_token is None:
