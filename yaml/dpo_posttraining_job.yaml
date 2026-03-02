@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: dpo-pretraining
+  name: dpo-posttraining
   namespace: dsc-capstone-25-26
 spec:
   backoffLimit: 0
@@ -50,18 +50,28 @@ spec:
 
             unzip -o data/train_100m_passages.zip -d data
 
-            python -m data.build_tf_idf \
-              --wiki_jsonl data/simple_wiki_passages.jsonl \
-              --out data/tfidf_wiki.json
-            
-            python -m training.pretraining_dpo \
-              --idf_json data/tfidf_wiki.json \
-              --train_jsonl data/train_100m_passages.jsonl \
-              --batch_size 16 \
-              --epochs 3 \
-              --lr 5e-5 \
-              --warmup_steps 200 \
-              --total_steps 5000 \
+            python -m training.dpo_full_train_stage2 \
+              --init_ckpt /workspace/checkpoints/stage1_sft_ckpt \
+              --input_path data/simple_wiki_passages.jsonl \
+              --output_path /workspace/checkpoints/dpo_training \
+              --epochs 1 \
+              --batch_size 2 \
+              --grad_accum 1 \
+              --lr 5e-7 \
+              --max_length 256 \
+              --nll_warmup_steps 0 \
+              --nll_steps_per_cycle 0 \
+              --dpo_steps_per_cycle 1 \
+              --nll_batch_size 2 \
+              --score_gap_min 0.0 \
+              --max_pair_similarity 0.99 \
+              --max_resample_tries 0 \
+              --max_new_tokens 16 \
+              --temperature 0.7 \
+              --top_p 0.9 \
+              --repetition_penalty 1.1 \
+              --no_repeat_ngram_size 0 \
+              --kl_weight 0.02
             
             echo "checkpoints saved to /workspace/checkpoints"
             ls -lh /workspace/checkpoints/

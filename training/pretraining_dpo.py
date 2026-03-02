@@ -442,7 +442,7 @@ def main():
 
     pretrain_steps = pre_training(
         text_dataset=text,
-        output_dir="stage0_ckpt",
+        output_dir="/workspace/checkpoints/stage0_ckpt",
         input=args.train_jsonl,
         model_name="gpt2",
         block_size=args.block_size,
@@ -475,7 +475,6 @@ def main():
         eval_dataset=test_dataset,
         idf=idf,
         optimizer=optimizer,
-        scheduler=scheduler,
         device=device,
         probe_prompts=probe_prompts,
         block_size=args.block_size,
@@ -484,8 +483,9 @@ def main():
         num_epochs=args.epochs,
     )
 
-    model.save_pretrained("stage1_sft_ckpt")
-    tokenizer.save_pretrained("stage1_sft_ckpt")
+    stage1 = "/workspace/checkpoints/stage1_sft_ckpt"
+    model.save_pretrained(stage1)
+    tokenizer.save_pretrained(stage1)
 
 if __name__ == "__main__":
     main()
