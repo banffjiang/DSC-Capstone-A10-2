@@ -47,7 +47,7 @@ spec:
             # --- DPO smoke test ---
             # Uses pretrained gpt2 (no init_ckpt), small dataset, and forces DPO every optimizer step.
             # Disables NLL mixing and KL to isolate "does DPO pipeline run and step?"
-            python -m training.dpo_full_train_stage2 \
+            python -m training.dpo_full_train_logged \
               --policy_model gpt2 \
               --input_path data/simple_wiki_passages_8k.jsonl \
               --output_path /workspace/checkpoints/dpo_debug_kl \
