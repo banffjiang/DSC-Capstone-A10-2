@@ -417,6 +417,8 @@ def parse_args():
     parser.add_argument("--wandb_project", type=str, default=None)
     parser.add_argument("--wandb_run_name", type=str, default=None)
 
+    parser.add_argument("--skip_stage0", type=str, default=None)
+
     return parser.parse_args()
 
 def main():
@@ -440,19 +442,20 @@ def main():
 
     probe_prompts = build_probe_prompts(wiki_text, n=3)
 
-    # pretrain_steps = pre_training(
-    #     text_dataset=text,
-    #     output_dir="/workspace/checkpoints/stage0_ckpt",
-    #     input=args.train_jsonl,
-    #     model_name="gpt2",
-    #     block_size=args.block_size,
-    #     batch_size=args.batch_size,
-    #     lr=args.lr,
-    #     warmup_steps=args.warmup_steps,
-    #     total_steps=20000,
-    #     probe_prompts=probe_prompts,
-    #     device=device,
-    # )
+    if args.skip_stage0 != None:
+        pretrain_steps = pre_training(
+            text_dataset=text,
+            output_dir="/workspace/checkpoints/stage0_ckpt",
+            input=args.train_jsonl,
+            model_name="gpt2",
+            block_size=args.block_size,
+            batch_size=args.batch_size,
+            lr=args.lr,
+            warmup_steps=args.warmup_steps,
+            total_steps=20000,
+            probe_prompts=probe_prompts,
+            device=device,
+        )
 
     tokenizer = AutoTokenizer.from_pretrained("/workspace/checkpoints/stage0_ckpt")
     if tokenizer.pad_token is None:

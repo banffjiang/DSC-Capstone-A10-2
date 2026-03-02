@@ -15,4 +15,4 @@ spec:
   volumes:
     - name: workspace
       persistentVolumeClaim:
-        claimName: dpo-sweep-storage
+        claimName: dpo-full-storage
