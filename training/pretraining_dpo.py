@@ -454,11 +454,11 @@ def main():
         device=device,
     )
 
-    tokenizer = AutoTokenizer.from_pretrained("stage0_ckpt")
+    tokenizer = AutoTokenizer.from_pretrained("/workspace/checkpoints/stage0_ckpt")
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    model = AutoModelForCausalLM.from_pretrained("stage0_ckpt").to(device)
+    model = AutoModelForCausalLM.from_pretrained("/workspace/checkpoints/stage0_ckpt").to(device)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
     scheduler = get_cosine_schedule_with_warmup(
