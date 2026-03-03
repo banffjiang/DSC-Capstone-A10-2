@@ -69,9 +69,9 @@ def collate_pairs(tokenizer, prompts, chosen, rejected, *, max_length):
     prompt_lens = token_p["attention_mask"].sum(dim=1)
  
     
-    tokenizer_chosen = tokenizer([p + c for p, c in zip(prompts, chosen)],
+    tokenizer_chosen = tokenizer([p + " " + c for p, c in zip(prompts, chosen)],
                       padding=True, return_tensors="pt", truncation=True, max_length=max_length)
-    tokenizer_rejected = tokenizer([p + r for p, r in zip(prompts, rejected)],
+    tokenizer_rejected = tokenizer([p + " " + r for p, r in zip(prompts, rejected)],
                       padding=True, return_tensors="pt", truncation=True, max_length=max_length)
 
     labels_c = _mask_prompt_labels(tokenizer_chosen["input_ids"], prompt_lens, tokenizer.pad_token_id)
@@ -150,6 +150,14 @@ def _anneal_alpha(epoch, max_epochs, alpha0, k):
 
     return alpha0 * float(torch.exp(torch.tensor(-k * t)))
 
+
+def _anneal_alpha_by_steps(dpo_step, total_dpo_steps, alpha0, k):
+    """Exponential decay based on *DPO optimizer steps* instead of epoch."""
+    if total_dpo_steps <= 0:
+        return alpha0
+    t = float(dpo_step) / float(max(1, total_dpo_steps))  # 0 -> 1
+    return alpha0 * float(torch.exp(torch.tensor(-k * t)))
+
 def kl_tokenwise(policy_logits, ref_logits, mask):
     #choses to use ref or policy for each tokens then computes
     logp = F.log_softmax(policy_logits.float(), dim=-1)   # [B,T,V]
@@ -159,37 +167,48 @@ def kl_tokenwise(policy_logits, ref_logits, mask):
     mask = mask.float()
     return (kl * mask).sum() / (mask.sum() + 1e-8)
 
-def dpo_loss(policy, ref, batch, epoch, max_epochs, alpha0, alpha_k, *, beta, kl_last_k = 128, kl_weight = 0.01, kl_chosen_only = False): #is a BatchPair
+
+def dpo_loss(
+    policy,
+    ref,
+    batch,
+    alpha_t,
+    *,
+    beta,
+    kl_last_k=128,
+    kl_weight=0.01,
+    kl_chosen_only=False,
+    compute_kl=True,
+    logit_clamp=50.0,
+):
     pi_chosen = sequential_log_prob(policy, batch.ids_c, batch.attn_c, batch.labels_c)
     pi_rejected = sequential_log_prob(policy, batch.ids_r, batch.attn_r, batch.labels_r)
 
     with torch.no_grad():
         ref_chosen = sequential_log_prob(ref, batch.ids_c, batch.attn_c, batch.labels_c)
         ref_rejected = sequential_log_prob(ref, batch.ids_r, batch.attn_r, batch.labels_r)
-    
-    #dpo preference objective
-    pref_logits = (pi_chosen - pi_rejected) - (ref_chosen - ref_rejected) 
+
+    pref_logits = (pi_chosen - pi_rejected) - (ref_chosen - ref_rejected)
 
     with torch.no_grad():
-        len_c = _completion_lengths(batch.labels_c).float() 
-        len_r = _completion_lengths(batch.labels_r).float()  
-        len_adv = (len_r - len_c) / (len_r + len_c + float('1e-8')) # float is to avoid crashes when both produce output of length 0
+        len_c = _completion_lengths(batch.labels_c).float()
+        len_r = _completion_lengths(batch.labels_r).float()
+        len_adv = (len_r - len_c) / (len_r + len_c + float("1e-8"))
 
-        modded_alpha = _anneal_alpha(epoch, max_epochs, alpha0, alpha_k) #makes alpha decrease over time exponentially
+    logits = beta * pref_logits + float(alpha_t) * len_adv
+    if logit_clamp is not None:
+        logits = logits.clamp(-float(logit_clamp), float(logit_clamp))
 
-    logits = beta * pref_logits + modded_alpha * len_adv #combines the preference score and length scoring
-
-    loss = -F.logsigmoid(logits).mean() #negative log likelihood of choosing chosen over rejected
+    loss = -F.logsigmoid(logits).mean()
 
     loss_kl = None
-    if kl_weight > 0.0:
-        #masks out the prompt and padding tokens
+    if compute_kl and kl_weight > 0.0:
         def _kl_for(ids, attn, labels):
-            pol_logits = policy(input_ids=ids, attention_mask=attn).logits[:, :-1, :]  # [B,T-1,V]
+            pol_logits = policy(input_ids=ids, attention_mask=attn).logits[:, :-1, :]
             with torch.no_grad():
                 ref_logits = ref(input_ids=ids, attention_mask=attn).logits[:, :-1, :]
 
-            valid = (labels[:, 1:] != -100)  # [B,T-1], ignore prompt + padding (your masking uses -100)
+            valid = (labels[:, 1:] != -100)
 
             if kl_last_k is not None:
                 pol_logits = pol_logits[:, -kl_last_k:, :]
@@ -206,24 +225,20 @@ def dpo_loss(policy, ref, batch, epoch, max_epochs, alpha0, alpha_k, *, beta, kl
             loss_kl = 0.5 * (kl_c + kl_r)
 
         loss = loss + kl_weight * loss_kl
-    else:
-        loss = loss
 
     def _check_finite(name, t):
         if not torch.isfinite(t).all():
             raise RuntimeError(f"{name} has NaN/Inf")
 
-    _check_finite("loss_dpo", loss)
+    _check_finite("loss_total", loss)
     if loss_kl is not None:
         _check_finite("loss_kl", loss_kl)
-    _check_finite("loss_total", loss)
-
 
     metrics = {
         "loss": float(loss.item()),
         "pref_logit_mean": float(pref_logits.mean().item()),
         "len_adv_mean": float(len_adv.mean().item()),
-        "alpha": float(modded_alpha),
+        "alpha": float(alpha_t),
         "len_chosen_mean": float(len_c.mean().item()),
         "len_rejected_mean": float(len_r.mean().item()),
     }
@@ -338,6 +353,12 @@ def train_dpo(
         ema_decay,
         train_loss_ema_alpha,
         train_loss_sma_window,
+        # Generation stabilization (Part 3)
+        gen_warmup_optimizer_steps,
+        gen_warmup_top_p,
+        gen_warmup_temperature,
+        gen_warmup_max_new_tokens,
+        min_gen_tokens,
         wandb_project=None,
         wandb_run_name=None
 ):
@@ -438,23 +459,19 @@ def train_dpo(
         #training the randomized model
         nll_batch_size = nll_batch_size or batch_size
 
-        optimizer_steps_total = 0 
-        cycle_pos = 0
+        optimizer_step = 0
+        dpo_optimizer_step = 0      # optimizer steps that were DPO
+        micro_step = 0
+
         cycle_len = nll_steps_per_cycle + dpo_steps_per_cycle
 
-        def want_nll_step():
-            if optimizer_steps_total < nll_warmup_steps:
-                return True
+        def scheduled_mode(step_idx: int) -> str:
+            if step_idx < nll_warmup_steps:
+                return "nll"
             if cycle_len == 0:
-                return False
-            return (cycle_pos % cycle_len) < nll_steps_per_cycle
-
-        def want_dpo_step():
-            if optimizer_steps_total < nll_warmup_steps:
-                return False
-            if cycle_len == 0:
-                return True
-            return (cycle_pos % cycle_len) >= nll_steps_per_cycle
+                return "dpo"
+            pos = (step_idx - nll_warmup_steps) % cycle_len
+            return "nll" if pos < nll_steps_per_cycle else "dpo"
 
         print(f"[Listener] Initializing BERTScore listener: {listener_model_type}")
         listener = BERTScoreListener(
@@ -495,159 +512,187 @@ def train_dpo(
         for ex in test_examples[:3]:  # uses fixed test examples to compare change
             sample_eval_prompts.append(make_prompt(ex["passage"]))
 
+        lm_corpus = [ex["passage"] for ex in train_examples]
+        lm_idx = 0
+
+        def next_lm_batch_texts(bs: int):
+            nonlocal lm_idx
+            out = []
+            for _ in range(bs):
+                out.append(lm_corpus[lm_idx])
+                lm_idx = (lm_idx + 1) % len(lm_corpus)
+            return out
+
+        # Target total DPO optimizer steps for step-based alpha anneal
+        steps_per_epoch_est = max(1, len(train_examples) // batch_size)
+        if (nll_steps_per_cycle + dpo_steps_per_cycle) > 0:
+            dpo_frac = float(dpo_steps_per_cycle) / float(nll_steps_per_cycle + dpo_steps_per_cycle)
+        else:
+            dpo_frac = 1.0
+        total_dpo_optimizer_steps_target = max(1, int(epochs * steps_per_epoch_est * dpo_frac))
+
         policy.train()
-        # Debug: print first N DPO examples with listener (BERTScore) outputs
-        debug_print_limit = 100
-        debug_printed = 0
-        global_step = 0
         total_kept = 0
         total_skipped = 0
+        # Debug: print BERTScore + chosen/rejected generations for early steps
+        debug_print_first_optimizer_steps = 50   # "at the start"
+        debug_print_every_n_optimizer_steps = 5
+        _debug_printed_optimizer_steps = set()
 
-        lm_texts = []
 
         for e in range(epochs):
             print(f"\n{'='*50}")
             print(f"EPOCH {e+1}/{epochs}")
             print(f"{'='*50}")
-            
-            prompts, chosen, rejected = [], [], []
+
             kept, skipped = 0, 0
             dropped_after_collate = 0
             total_dropped_after_collate = 0
 
-            for example in train_examples:
-                utterance = example['passage']
-                prompt = make_prompt(utterance)
-                reference_text = utterance
+            ex_i = 0
+            while ex_i < len(train_examples):
+                mode = scheduled_mode(optimizer_step)
 
-                #for token pred
-                lm_texts.append(utterance)
+                optimizer.zero_grad(set_to_none=True)
 
-                if len(lm_texts) >= nll_batch_size and want_nll_step():
-                    lm_batch = collate_lm(tokenizer, lm_texts[:nll_batch_size], max_length=max_length)
-                    lm_batch = {k: v.to(device) for k, v in lm_batch.items()}
-                    loss_nll = nll_loss(policy, lm_batch)
+                if mode == "nll":
+                    for _ in range(grad_accum):
+                        lm_text_batch = next_lm_batch_texts(nll_batch_size)
+                        lm_batch = collate_lm(tokenizer, lm_text_batch, max_length=max_length)
+                        lm_batch = {k: v.to(device) for k, v in lm_batch.items()}
 
-                    loss_value = float(loss_nll.item())
-                    loss_scaled = loss_nll / grad_accum
-                    loss_scaled.backward()
-                    global_step += 1
+                        loss_nll = nll_loss(policy, lm_batch)
+                        (loss_nll / grad_accum).backward()
+                        micro_step += 1
 
-                    #log for token pred
-                    if wandb_project is not None:
-                        wandb.log(
-                            {
-                                "train/nll_loss_raw": loss_value,
-                                "epoch": e,
-                                "global_step": global_step,
-                                "optimizer_steps_total": optimizer_steps_total,
-                                "schedule/in_warmup": int(optimizer_steps_total < nll_warmup_steps),
-                                "schedule/want_nll": int(True),
-                                "schedule/want_dpo": int(False),
-                            }
-                        )
-                    
-                    if global_step % grad_accum == 0:
-                        torch.nn.utils.clip_grad_norm_(policy.parameters(), 1.0)
-                        optimizer.step()
-                        optimizer.zero_grad()
+                        if wandb_project is not None:
+                            wandb.log(
+                                {
+                                    "train/nll_loss_raw": float(loss_nll.item()),
+                                    "epoch": e,
+                                    "global_step": micro_step,
+                                    "optimizer_steps_total": optimizer_step,
+                                    "dpo_optimizer_step": dpo_optimizer_step,
+                                    "schedule/mode": 0, 
+                                }
+                            )
 
-                        optimizer_steps_total += 1
-                        cycle_pos += 1
+                    torch.nn.utils.clip_grad_norm_(policy.parameters(), 1.0)
+                    optimizer.step()
 
-                        with torch.no_grad():
-                            for p, pr in zip(policy.parameters(), reference.parameters()):
-                                pr.mul_(ema_decay).add_(p, alpha=1.0 - ema_decay)
+                    with torch.no_grad():
+                        for p, pr in zip(policy.parameters(), reference.parameters()):
+                            pr.mul_(ema_decay).add_(p, alpha=1.0 - ema_decay)
 
-                        # Save checkpoint
-                        save_interval = 500
-                        if optimizer_steps_total % save_interval == 0:
-                            checkpoint_path = os.path.join(output_path, f"checkpoint-{optimizer_steps_total}")
-                            os.makedirs(checkpoint_path, exist_ok=True)
-                            policy.save_pretrained(checkpoint_path)
-                            tokenizer.save_pretrained(checkpoint_path)
-                            print(f"[Checkpoint] Saved at step {optimizer_steps_total}: {checkpoint_path}")
-                            if wandb_project is not None:
-                                wandb.log({"checkpoint_step": optimizer_steps_total, "global_step": global_step})
+                    optimizer_step += 1
 
-                    lm_texts = lm_texts[nll_batch_size:]  # drop consumed texts
+                else:
+                    did_any_dpo = False
 
-                if want_dpo_step():
+                    for _ in range(grad_accum):
+                        prompts, chosen, rejected = [], [], []
 
-                    seed_a = torch.randint(0, 2**31 - 1, (1,)).item()
+                        # Fill one DPO batch
+                        while len(prompts) < batch_size and ex_i < len(train_examples):
+                            example = train_examples[ex_i]
+                            ex_i += 1
 
-                    candidate_a = generate_summary(
-                        policy, tokenizer, prompt,
-                        top_p=top_p, temperature=temperature,
-                        max_new_tokens=max_new_tokens,
-                        repetition_penalty=repetition_penalty,
-                        no_repeat_ngram_size=no_repeat_ngram_size,
-                        seed=seed_a
-                    )
-                    
-                    # Resample candidate_b if too similar to candidate_a
-                    for _ in range(max_resample_tries + 1):
-                        seed_b = torch.randint(0, 2**31 - 1, (1,)).item()
-                        candidate_b = generate_summary(
-                            policy, tokenizer, prompt,
-                            top_p=top_p, temperature=temperature,
-                            max_new_tokens=max_new_tokens,
-                            repetition_penalty=repetition_penalty,
-                            no_repeat_ngram_size=no_repeat_ngram_size,
-                            seed=seed_b
-                        )
-                        similarity = jaccard_ngrams(candidate_a, candidate_b, n=2)
-                        if similarity <= max_pair_similarity:
+                            utterance = example["passage"]
+                            prompt = make_prompt(utterance)
+                            reference_text = utterance
+
+                            # Early-stage generation stabilization (Part 3)
+                            if optimizer_step < gen_warmup_optimizer_steps:
+                                _top_p = gen_warmup_top_p
+                                _temp = gen_warmup_temperature
+                                _mxt = gen_warmup_max_new_tokens
+                            else:
+                                _top_p = top_p
+                                _temp = temperature
+                                _mxt = max_new_tokens
+
+                            seed_a = torch.randint(0, 2**31 - 1, (1,)).item()
+                            candidate_a = generate_summary(
+                                policy, tokenizer, prompt,
+                                top_p=_top_p, temperature=_temp,
+                                max_new_tokens=_mxt,
+                                repetition_penalty=repetition_penalty,
+                                no_repeat_ngram_size=no_repeat_ngram_size,
+                                seed=seed_a
+                            )
+
+                            # Minimum length filter (Part 3)
+                            if min_gen_tokens > 0 and len(tokenizer.encode(candidate_a.strip())) < min_gen_tokens:
+                                skipped += 1
+                                total_skipped += 1
+                                continue
+
+                            # Resample candidate_b if too similar to candidate_a
+                            for _ in range(max_resample_tries + 1):
+                                seed_b = torch.randint(0, 2**31 - 1, (1,)).item()
+                                candidate_b = generate_summary(
+                                    policy, tokenizer, prompt,
+                                    top_p=_top_p, temperature=_temp,
+                                    max_new_tokens=_mxt,
+                                    repetition_penalty=repetition_penalty,
+                                    no_repeat_ngram_size=no_repeat_ngram_size,
+                                    seed=seed_b
+                                )
+
+                                if min_gen_tokens > 0 and len(tokenizer.encode(candidate_b.strip())) < min_gen_tokens:
+                                    continue
+
+                                similarity = jaccard_ngrams(candidate_a, candidate_b, n=2)
+                                if similarity <= max_pair_similarity:
+                                    break
+
+                            preferred = listener.prefer(candidate_a, candidate_b, reference_text)
+                            score_a = float(preferred["score_a"])
+                            score_b = float(preferred["score_b"])
+                            gap = abs(score_a - score_b)
+
+                            if gap < score_gap_min:
+                                skipped += 1
+                                total_skipped += 1
+                                continue
+
+                            if preferred["preferred"] == "A":
+                                c, r = candidate_a, candidate_b
+                            else:
+                                c, r = candidate_b, candidate_a
+
+                            
+                            # Debug print every N optimizer steps for the first few optimizer steps
+                            if (
+                                optimizer_step < debug_print_first_optimizer_steps
+                                and (optimizer_step % debug_print_every_n_optimizer_steps) == 0
+                                and (optimizer_step not in _debug_printed_optimizer_steps)
+                            ):
+                                _debug_printed_optimizer_steps.add(optimizer_step)
+                                print(f"\n[DPO][DEBUG] optimizer_step={optimizer_step} epoch={e+1}/{epochs} ex_i={ex_i} seed_a={seed_a} seed_b={seed_b}")
+                                print(f"[DPO][DEBUG] score_a={score_a:.6f} score_b={score_b:.6f} gap={gap:.6f} preferred={preferred['preferred']}")
+                                # keep logs readable
+                                def _clip(s, n=400):
+                                    s = (s or '').replace('\n', ' ')
+                                    return s if len(s) <= n else (s[:n] + ' ...')
+                                print(f"[DPO][DEBUG] prompt: {_clip(prompt, 400)}")
+                                print(f"[DPO][DEBUG] reference: {_clip(reference_text, 400)}")
+                                print(f"[DPO][DEBUG] CHOSEN: {_clip(c, 400)}")
+                                print(f"[DPO][DEBUG] REJECTED: {_clip(r, 400)}")
+                                print('-' * 80)
+                            prompts.append(prompt)
+                            chosen.append(c)
+                            rejected.append(r)
+                            kept += 1
+                            total_kept += 1
+
+                        if len(prompts) < batch_size:
                             break
 
-                    # Listener evaluation
-                    preferred = listener.prefer(candidate_a, candidate_b, reference_text)
-                    score_a = float(preferred['score_a'])
-                    score_b = float(preferred['score_b'])
-                    gap = abs(score_a - score_b)
-
-                    # Debug prints (terminal): first N DPO examples
-                    if debug_printed < debug_print_limit:
-                        debug_printed += 1
-                        print("\n" + "-"*80, flush=True)
-                        print(f"[DPO][DEBUG {debug_printed}/{debug_print_limit}] epoch={e+1}/{epochs} step={global_step} seed_a={seed_a} seed_b={seed_b}", flush=True)
-                        print(f"[DPO][DEBUG] score_a={score_a:.6f} score_b={score_b:.6f} gap={gap:.6f} preferred={preferred.get('preferred')}", flush=True)
-                        # Print prompt/reference and candidates (truncate to keep logs readable)
-                        def _trunc(s, n=400):
-                            s = str(s)
-                            return s if len(s) <= n else s[:n] + " ...[truncated]"
-                        print("[DPO][DEBUG] prompt:", _trunc(prompt, 600), flush=True)
-                        print("[DPO][DEBUG] reference_text:", _trunc(reference_text, 600), flush=True)
-                        print("[DPO][DEBUG] candidate_a:", _trunc(candidate_a, 600), flush=True)
-                        print("[DPO][DEBUG] candidate_b:", _trunc(candidate_b, 600), flush=True)
-                        print("-"*80 + "\n", flush=True)
-
-                    # Skip low-quality pairs
-                    if gap < score_gap_min:
-                        skipped += 1
-                        total_skipped += 1
-                        continue
-
-                    # Determine chosen/rejected
-                    if preferred['preferred'] == 'A':
-                        c, r = candidate_a, candidate_b
-                    else:
-                        c, r = candidate_b, candidate_a
-
-                    prompts.append(prompt)
-                    chosen.append(c)
-                    rejected.append(r)
-                    kept += 1
-                    total_kept += 1
-
-                    # Process batch when full
-                    if len(prompts) == batch_size:
                         batch = collate_pairs(tokenizer, prompts, chosen, rejected, max_length=max_length)
-
-                        if batch.ids_c.size(0) == 0: #get around edge case where all pairs are filtered out
+                        if batch.ids_c.size(0) == 0:
                             dropped_after_collate += 1
                             total_dropped_after_collate += 1
-                            prompts, chosen, rejected = [], [], []
                             continue
 
                         batch = PairBatch(
@@ -655,27 +700,38 @@ def train_dpo(
                             batch.ids_r.to(device), batch.attn_r.to(device), batch.labels_r.to(device),
                         )
 
-                        loss, metrics = dpo_loss(policy, reference, batch, e, epochs, alpha, alpha_k, beta=beta,
-                                                    kl_last_k=kl_last_k, kl_weight=kl_weight, kl_chosen_only=kl_chosen_only 
-                                                )
+                        alpha_t = _anneal_alpha_by_steps(dpo_optimizer_step, total_dpo_optimizer_steps_target, alpha, alpha_k)
+                        compute_kl = (kl_weight > 0.0) and ((dpo_optimizer_step % KL_CHECK) == 0)
 
-                        loss_value = loss.item()
+                        loss, metrics = dpo_loss(
+                            policy, reference, batch,
+                            alpha_t,
+                            beta=beta,
+                            kl_last_k=kl_last_k,
+                            kl_weight=kl_weight,
+                            kl_chosen_only=kl_chosen_only,
+                            compute_kl=compute_kl,
+                        )
+
+                        loss_value = float(loss.item())
                         train_loss_sma = _update_sma(train_loss_sma_values, loss_value)
                         train_loss_ema = _update_ema(train_loss_ema, train_loss_sma, ema_alpha)
-                        loss = loss / grad_accum
 
-                        loss.backward()
-                        global_step += 1
+                        (loss / grad_accum).backward()
+                        micro_step += 1
+                        did_any_dpo = True
 
-                        # Log to wandb
                         if wandb_project is not None:
                             wandb.log({
                                 "train/loss_raw": loss_value,
-                                "train/loss": train_loss_sma,
                                 "train/loss_sma": train_loss_sma,
                                 "train/loss_ema": train_loss_ema,
                                 "epoch": e,
-                                "global_step": global_step,
+                                "global_step": micro_step,
+                                "optimizer_steps_total": optimizer_step,
+                                "dpo_optimizer_step": dpo_optimizer_step,
+                                "alpha_t": float(alpha_t),
+                                "kl/compute": int(compute_kl),
                                 **metrics,
                                 "kept_pairs": kept,
                                 "skipped_pairs": skipped,
@@ -685,48 +741,39 @@ def train_dpo(
                                 "total_dropped_after_collate_pairs": total_dropped_after_collate
                             })
 
-                        # Optimizer step with gradient accumulation
-                        if global_step % grad_accum == 0:
-                            torch.nn.utils.clip_grad_norm_(policy.parameters(), 1.0)
-                            optimizer.step()
-                            optimizer.zero_grad()
+                    if not did_any_dpo:
+                        break
 
-                            optimizer_steps_total += 1
-                            cycle_pos += 1
+                    torch.nn.utils.clip_grad_norm_(policy.parameters(), 1.0)
+                    optimizer.step()
 
-                            with torch.no_grad():
-                                for p, pr in zip(policy.parameters(), reference.parameters()):
-                                    pr.mul_(ema_decay).add_(p, alpha=1.0 - ema_decay)
-                            
-                            # Save checkpoints
-                            save_interval = 500
-                            if optimizer_steps_total % save_interval == 0:
-                                checkpoint_path = os.path.join(output_path, f"checkpoint-{optimizer_steps_total}")
-                                os.makedirs(checkpoint_path, exist_ok=True)
-                                policy.save_pretrained(checkpoint_path)
-                                tokenizer.save_pretrained(checkpoint_path)
-                                print(f"[Checkpoint] Saved at step {optimizer_steps_total}: {checkpoint_path}")
-                                
-                                # Log checkpoint to wandb
-                                if wandb_project is not None:
-                                    wandb.log({
-                                        "checkpoint_step": optimizer_steps_total,
-                                        "global_step": global_step,
-                                    })
+                    with torch.no_grad():
+                        for p, pr in zip(policy.parameters(), reference.parameters()):
+                            pr.mul_(ema_decay).add_(p, alpha=1.0 - ema_decay)
 
-                        prompts, chosen, rejected = [], [], []
+                    optimizer_step += 1
+                    dpo_optimizer_step += 1
 
-                    # Periodic logging
-                    if (global_step + 1) % 50 == 0:
-                        print(f"[Epoch {e+1}] Steps={global_step} | Kept={kept} | Skipped={skipped}")
-                        print()
-            
+                # checkpointing
+                save_interval = 500
+                if optimizer_step % save_interval == 0:
+                    checkpoint_path = os.path.join(output_path, f"checkpoint-{optimizer_step}")
+                    os.makedirs(checkpoint_path, exist_ok=True)
+                    policy.save_pretrained(checkpoint_path)
+                    tokenizer.save_pretrained(checkpoint_path)
+                    print(f"[Checkpoint] Saved at step {optimizer_step}: {checkpoint_path}")
+                    if wandb_project is not None:
+                        wandb.log({"checkpoint_step": optimizer_step, "global_step": micro_step})
+
+                if optimizer_step % 50 == 0:
+                    print(f"[Epoch {e+1}] optimizer_step={optimizer_step} | dpo_optimizer_step={dpo_optimizer_step} | Kept={kept} | Skipped={skipped}")
 
             print(
                 f"\n[Epoch {e+1} Complete] Total pairs kept: {kept}, skipped: {skipped}, "
                 f"dropped_after_collate: {dropped_after_collate}"
             )
 
+            # Validation (kept mostly the same, but uses new dpo_loss signature)
             if run_validation and len(test_examples) > 0:
                 policy.eval()
 
@@ -747,6 +794,8 @@ def train_dpo(
                 val_surprisal_sum = 0.0
                 val_surprisal_n = 0
 
+                alpha_t_val = _anneal_alpha_by_steps(dpo_optimizer_step, total_dpo_optimizer_steps_target, alpha, alpha_k)
+
                 with torch.no_grad():
                     for example in val_examples:
                         utterance = example["passage"]
@@ -762,9 +811,8 @@ def train_dpo(
                         out = policy(**enc, labels=enc["input_ids"])
                         val_surprisal_sum += float(out.loss.item())
                         val_surprisal_n += 1
-                        
-                        seed_a = val_rng.randrange(0, 2**31 - 1)
 
+                        seed_a = val_rng.randrange(0, 2**31 - 1)
                         candidate_a = generate_summary(
                             policy, tokenizer, prompt,
                             top_p=top_p, temperature=temperature,
@@ -811,9 +859,15 @@ def train_dpo(
                                 vb.ids_c.to(device), vb.attn_c.to(device), vb.labels_c.to(device),
                                 vb.ids_r.to(device), vb.attn_r.to(device), vb.labels_r.to(device),
                             )
-                            vloss, _ = dpo_loss(policy, reference, vb, e, epochs, alpha, alpha_k, beta=beta,
-                                                    kl_last_k=kl_last_k, kl_weight=kl_weight, kl_chosen_only=kl_chosen_only
-                                                )
+                            vloss, _ = dpo_loss(
+                                policy, reference, vb,
+                                alpha_t_val,
+                                beta=beta,
+                                kl_last_k=kl_last_k,
+                                kl_weight=kl_weight,
+                                kl_chosen_only=kl_chosen_only,
+                                compute_kl=False,
+                            )
                             val_loss_sum += float(vloss.item())
                             val_loss_n += 1
 
@@ -835,7 +889,7 @@ def train_dpo(
                 if wandb_project is not None:
                     payload = {
                         "epoch": e,
-                        "global_step": global_step,
+                        "global_step": micro_step,
                         "val_total_pairs": val_total,
                         "val_kept_pairs": val_kept,
                         "val_skipped_pairs": val_skipped,
@@ -844,6 +898,7 @@ def train_dpo(
                         "val_effective_kept_pairs": val_effective_kept,
                         "val_dropped_after_collate_pairs": val_dropped_after_collate,
                         "val_loss_batches": val_loss_n,
+                        "alpha_t": float(alpha_t_val),
                     }
                     if val_loss is not None:
                         val_loss_ema = _update_ema(val_loss_ema, val_loss, ema_alpha)
@@ -854,8 +909,8 @@ def train_dpo(
                     wandb.log(payload)
 
                 policy.train()
-            
-            #check qualitative output on sample eval
+
+            # qualitative samples
             for i, prompt in enumerate(sample_eval_prompts):
                 inspect_top_p_tokens(policy, tokenizer, prompt, top_p=top_p, top_n_to_show=20)
                 sample = quick_generate_sample(
@@ -868,7 +923,6 @@ def train_dpo(
                     repetition_penalty=repetition_penalty,
                     no_repeat_ngram_size=no_repeat_ngram_size,
                 )
-
                 print(f"\n[Sample {i}]")
                 print(sample)
 
@@ -915,6 +969,13 @@ def parse_args():
     parser.add_argument("--max_new_tokens", type=int, default=16)
     parser.add_argument("--repetition_penalty", type=float, default=1.2)
     parser.add_argument("--no_repeat_ngram_size", type=int, default=0)
+
+    # Generation stabilization (Part 3)
+    parser.add_argument("--gen_warmup_optimizer_steps", type=int, default=0, help="For the first N optimizer steps, use the warmup sampling params below for on-policy generation.")
+    parser.add_argument("--gen_warmup_top_p", type=float, default=0.9)
+    parser.add_argument("--gen_warmup_temperature", type=float, default=0.7)
+    parser.add_argument("--gen_warmup_max_new_tokens", type=int, default=16)
+    parser.add_argument("--min_gen_tokens", type=int, default=0, help="Skip candidates whose tokenized length is below this (0 disables).")
     
     # Preference filtering arguments
     parser.add_argument("--score_gap_min", type=float, default=1e-4)
@@ -996,7 +1057,12 @@ def main():
         kl_weight=args.kl_weight,
         kl_last_k=args.kl_last_k,
         ema_decay=args.ema_decay,
-        kl_chosen_only=args.kl_chosen_only
+        kl_chosen_only=args.kl_chosen_only,
+        gen_warmup_optimizer_steps=args.gen_warmup_optimizer_steps,
+        gen_warmup_top_p=args.gen_warmup_top_p,
+        gen_warmup_temperature=args.gen_warmup_temperature,
+        gen_warmup_max_new_tokens=args.gen_warmup_max_new_tokens,
+        min_gen_tokens=args.min_gen_tokens
     )
 
 if __name__ == "__main__":
