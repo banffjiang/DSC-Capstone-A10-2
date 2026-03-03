@@ -146,7 +146,7 @@ def pre_training(
     for epoch in range(100): #will break when steps are reached
         for batch in dl:
             step += 1
-            batch = {k: v.to(device) for k, v in batch.items()}
+            batch = {k: (v.to(device) if torch.is_tensor(v) else v) for k, v in batch.items()}
 
             out = model(**batch)
             loss = out.loss
@@ -305,7 +305,7 @@ def train_sft(
     for epoch in range(num_epochs):
         for batch in train_loader:
             global_step += 1
-            batch = {k: v.to(device) for k, v in batch.items()}
+            batch = {k: (v.to(device) if torch.is_tensor(v) else v) for k, v in batch.items()}
 
             loss = model(**batch).loss
             loss.backward()
@@ -376,7 +376,7 @@ def train_sft(
                 nb = 0
                 with torch.no_grad():
                     for ebatch in eval_loader:
-                        ebatch = {k: v.to(device) for k, v in ebatch.items()}
+                        ebatch = {k: (v.to(device) if isinstance(v, torch.Tensor) else v) for k, v in ebatch.items()}
                         eloss = model(**ebatch).loss
                         total += float(eloss.item())
                         nb += 1
@@ -442,7 +442,7 @@ def main():
 
     probe_prompts = build_probe_prompts(wiki_text, n=3)
 
-    if args.skip_stage0:
+    if not args.skip_stage0:
         pretrain_steps = pre_training(
             text_dataset=text,
             output_dir="/workspace/checkpoints/stage0_ckpt",
