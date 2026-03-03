@@ -328,7 +328,7 @@ def train_sft(
     device,
     probe_prompts=None,
     *,
-    block_size=128,
+    block_size=256,
     top_k=8,
     batch_size=16,
     num_epochs=3,
@@ -453,7 +453,7 @@ def parse_args():
     parser.add_argument("--test_size", type=float, default=0.1)
 
     # sft hyperparams
-    parser.add_argument("--block_size", type=int, default=128)
+    parser.add_argument("--block_size", type=int, default=256)
     parser.add_argument("--top_k", type=int, default=8)
     parser.add_argument("--batch_size", type=int, default=16)
     parser.add_argument("--epochs", type=int, default=3)
