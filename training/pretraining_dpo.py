@@ -113,7 +113,7 @@ def pre_training(
         text_dataset=None,
         input = "data/train_100m_passages.jsonl",
         model_name="gpt2",
-        block_size=128,
+        block_size=256,
         batch_size=16,
         lr=1e-4,
         warmup_steps=500,
@@ -135,7 +135,7 @@ def pre_training(
     dl = DataLoader(
         TextOnlyDataset(text_dataset),
         batch_size=batch_size,
-        shuffle=True,
+        shuffle=False,
         collate_fn=lambda batch_texts: collate_lm(tokenizer, batch_texts, max_length=block_size),
     )
 
@@ -222,7 +222,7 @@ def tfidf_target(src: str, idf: dict, top_k: int = 8, min_len: int = 2):
             break
     return " ".join(out) if out else "something"
 
-def collate_sft(batch, tokenizer, idf, block_size=128, top_k=8):
+def collate_sft(batch, tokenizer, idf, block_size=256, top_k=8):
     prompts = []
     targets = []
 
@@ -290,14 +290,14 @@ def train_sft(
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
-        shuffle=True,
+        shuffle=False,
         collate_fn=lambda b: collate_sft(b, tokenizer, idf, block_size=block_size, top_k=top_k),
     )
 
     eval_loader = DataLoader(
         eval_dataset,
         batch_size=batch_size,
-        shuffle=True,
+        shuffle=False,
         collate_fn=lambda b: collate_sft(b, tokenizer, idf, block_size=block_size, top_k=top_k),
     )
 
@@ -442,7 +442,7 @@ def main():
 
     probe_prompts = build_probe_prompts(wiki_text, n=3)
 
-    if args.skip_stage0 == None:
+    if args.skip_stage0:
         pretrain_steps = pre_training(
             text_dataset=text,
             output_dir="/workspace/checkpoints/stage0_ckpt",
