@@ -465,11 +465,6 @@ def main():
     model = AutoModelForCausalLM.from_pretrained("/workspace/checkpoints/stage0_ckpt").to(device)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
-    scheduler = get_cosine_schedule_with_warmup(
-        optimizer,
-        num_warmup_steps=args.warmup_steps,
-        num_training_steps=args.total_steps,
-    )
 
     train_sft(
         pretrain_steps,

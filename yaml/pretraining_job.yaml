@@ -59,7 +59,7 @@ spec:
               --train_jsonl data/train_100m_passages.jsonl \
               --batch_size 16 \
               --epochs 3 \
-              --lr 5e-5 \
+              --lr 1e-5 \
               --warmup_steps 200 \
               --total_steps 5000 \
               --skip_stage0 \
