@@ -185,35 +185,9 @@ def dpo_loss(policy, ref, batch, epoch, max_epochs, alpha0, alpha_k, *, beta, kl
     if kl_weight > 0.0:
         #masks out the prompt and padding tokens
         def _kl_for(ids, attn, labels):
-            # Robustly coerce batch fields to tensors on the right device.
-            # (This also avoids cryptic `RuntimeError: stoi` when something upstream provides string/object arrays.)
-            try:
-                dev = next(policy.parameters()).device
-            except StopIteration:
-                dev = torch.device("cpu")
-            if not torch.is_tensor(ids):
-                ids = torch.as_tensor(ids, dtype=torch.long, device=dev)
-            else:
-                ids = ids.to(device=dev, dtype=torch.long, non_blocking=True)
-            if not torch.is_tensor(attn):
-                attn = torch.as_tensor(attn, dtype=torch.long, device=dev)
-            else:
-                attn = attn.to(device=dev, dtype=torch.long, non_blocking=True)
             pol_logits = policy(input_ids=ids, attention_mask=attn).logits[:, :-1, :]  # [B,T-1,V]
             with torch.no_grad():
-                try:
-                    ref_logits = ref(input_ids=ids, attention_mask=attn).logits[:, :-1, :]
-                except Exception as ex:
-                    # Dump minimal debugging info before re-raising
-                    try:
-                        print('[DPO][KL] ref forward failed:', type(ex).__name__, str(ex))
-                        print('[DPO][KL] ids:', type(ids), getattr(ids, 'dtype', None), getattr(ids, 'shape', None), getattr(ids, 'device', None))
-                        print('[DPO][KL] attn:', type(attn), getattr(attn, 'dtype', None), getattr(attn, 'shape', None), getattr(attn, 'device', None))
-                        if torch.is_tensor(ids):
-                            print('[DPO][KL] ids min/max:', ids.min().item(), ids.max().item())
-                    except Exception:
-                        pass
-                    raise
+                ref_logits = ref(input_ids=ids, attention_mask=attn).logits[:, :-1, :]
 
             valid = (labels[:, 1:] != -100)  # [B,T-1], ignore prompt + padding (your masking uses -100)
 
@@ -517,33 +491,14 @@ def train_dpo(
                 wandb.run.summary["data_test"] = len(test_examples)
 
         sample_eval_prompts = []
-        # --- DPO debug logging (first N DPO generations) ---
-        dpo_debug_limit = 100
-        dpo_debug_seen = 0
-        dpo_debug_logged = 0
-        dpo_debug_table_logged = False
-        dpo_debug_table = None
-        if wandb_project is not None:
-            dpo_debug_table = wandb.Table(columns=[
-                "epoch",
-                "train_example_idx",
-                "global_step",
-                "optimizer_steps_total",
-                "prompt",
-                "reference_text",
-                "candidate_a",
-                "candidate_b",
-                "preferred",
-                "score_a",
-                "score_b",
-                "score_gap",
-                "kept_pair",
-            ])
 
         for ex in test_examples[:3]:  # uses fixed test examples to compare change
             sample_eval_prompts.append(make_prompt(ex["passage"]))
 
         policy.train()
+        # Debug: print first N DPO examples with listener (BERTScore) outputs
+        debug_print_limit = 100
+        debug_printed = 0
         global_step = 0
         total_kept = 0
         total_skipped = 0
@@ -560,7 +515,7 @@ def train_dpo(
             dropped_after_collate = 0
             total_dropped_after_collate = 0
 
-            for ex_idx, example in enumerate(train_examples):
+            for example in train_examples:
                 utterance = example['passage']
                 prompt = make_prompt(utterance)
                 reference_text = utterance
@@ -650,50 +605,22 @@ def train_dpo(
                     score_a = float(preferred['score_a'])
                     score_b = float(preferred['score_b'])
                     gap = abs(score_a - score_b)
-                    # Debug: log the first N DPO generations (even if skipped) to help diagnose degeneracy.
-                    dpo_debug_seen += 1
-                    if (dpo_debug_table is not None) and (dpo_debug_logged < dpo_debug_limit):
-                        kept_pair = int(gap >= score_gap_min)
-                        dpo_debug_table.add_data(
-                            int(e),
-                            int(ex_idx),
-                            int(global_step),
-                            int(optimizer_steps_total),
-                            str(prompt),
-                            str(reference_text),
-                            str(candidate_a),
-                            str(candidate_b),
-                            str(preferred.get("preferred")),
-                            float(score_a),
-                            float(score_b),
-                            float(gap),
-                            kept_pair,
-                        )
-                        dpo_debug_logged += 1
 
-                        # Also log a few scalar snapshots so you can see the scores without opening the table.
-                        wandb.log(
-                            {
-                                "dpo/debug_score_a": float(score_a),
-                                "dpo/debug_score_b": float(score_b),
-                                "dpo/debug_score_gap": float(gap),
-                                "dpo/debug_kept_pair": kept_pair,
-                                "global_step": global_step,
-                                "epoch": e,
-                                "optimizer_steps_total": optimizer_steps_total,
-                            }
-                        )
-
-                        # Once the table hits the limit, upload it once.
-                        if (dpo_debug_logged >= dpo_debug_limit) and (not dpo_debug_table_logged):
-                            wandb.log(
-                                {
-                                    "dpo/debug_first_100": dpo_debug_table,
-                                    "global_step": global_step,
-                                    "epoch": e,
-                                }
-                            )
-                            dpo_debug_table_logged = True
+                    # Debug prints (terminal): first N DPO examples
+                    if debug_printed < debug_print_limit:
+                        debug_printed += 1
+                        print("\n" + "-"*80, flush=True)
+                        print(f"[DPO][DEBUG {debug_printed}/{debug_print_limit}] epoch={e+1}/{epochs} step={global_step} seed_a={seed_a} seed_b={seed_b}", flush=True)
+                        print(f"[DPO][DEBUG] score_a={score_a:.6f} score_b={score_b:.6f} gap={gap:.6f} preferred={preferred.get('preferred')}", flush=True)
+                        # Print prompt/reference and candidates (truncate to keep logs readable)
+                        def _trunc(s, n=400):
+                            s = str(s)
+                            return s if len(s) <= n else s[:n] + " ...[truncated]"
+                        print("[DPO][DEBUG] prompt:", _trunc(prompt, 600), flush=True)
+                        print("[DPO][DEBUG] reference_text:", _trunc(reference_text, 600), flush=True)
+                        print("[DPO][DEBUG] candidate_a:", _trunc(candidate_a, 600), flush=True)
+                        print("[DPO][DEBUG] candidate_b:", _trunc(candidate_b, 600), flush=True)
+                        print("-"*80 + "\n", flush=True)
 
                     # Skip low-quality pairs
                     if gap < score_gap_min:
@@ -951,17 +878,6 @@ def train_dpo(
         policy.save_pretrained(final_path)
         tokenizer.save_pretrained(final_path)
         print(f"\nTraining Complete. Final model saved to: {final_path}")
-        # If we didn't reach the full debug limit, still upload whatever we collected.
-        if (wandb_project is not None) and (dpo_debug_table is not None) and (not dpo_debug_table_logged) and (dpo_debug_logged > 0):
-            wandb.log(
-                {
-                    "dpo/debug_first_100": dpo_debug_table,
-                    "global_step": global_step,
-                    "epoch": epochs - 1,
-                }
-            )
-            dpo_debug_table_logged = True
-
     
     finally:
         if sweep_mode:
