@@ -441,7 +441,7 @@ def main():
     train_dataset, test_dataset = split_train_test_examples(wiki_text, test_size=args.test_size, split_seed=RANDOM_SEED)
 
     probe_prompts = build_probe_prompts(wiki_text, n=3)
-    pretrain_steps = 20000
+    pretrain_steps = 0
 
     if not args.skip_stage0:
         pretrain_steps = pre_training(
