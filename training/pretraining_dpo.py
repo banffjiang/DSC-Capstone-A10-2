@@ -135,7 +135,7 @@ def pre_training(
     dl = DataLoader(
         TextOnlyDataset(text_dataset),
         batch_size=batch_size,
-        shuffle=False,
+        shuffle=True,
         collate_fn=lambda batch_texts: collate_lm(tokenizer, batch_texts, max_length=block_size),
     )
 
@@ -223,6 +223,54 @@ def tfidf_target(src: str, idf: dict, top_k: int = 8, min_len: int = 2):
     return " ".join(out) if out else "something"
 
 def collate_sft(batch, tokenizer, idf, block_size=128, top_k=8):
+    prompts, targets = [], []
+
+    prefix = "Keywords summary.\nText: "
+    suffix = "\nOutput:"
+
+    prefix_ids = tokenizer(prefix, add_special_tokens=False)["input_ids"]
+    suffix_ids = tokenizer(suffix, add_special_tokens=False)["input_ids"]
+
+    for e in batch:
+        src = e["passage"]
+        target = tfidf_target(src, idf, top_k=top_k)
+        targets.append(target)
+
+        # reserve space for " " + target tokens
+        target_ids = tokenizer(" " + target, add_special_tokens=False)["input_ids"]
+        budget = block_size - (len(prefix_ids) + len(suffix_ids) + len(target_ids))
+
+        # if target itself is too long, clip it (keeps training well-defined)
+        if budget < 1:
+            target_ids = target_ids[: max(1, block_size - (len(prefix_ids) + len(suffix_ids) + 1))]
+            budget = block_size - (len(prefix_ids) + len(suffix_ids) + len(target_ids))
+
+        passage_ids = tokenizer(src, add_special_tokens=False)["input_ids"][:budget]
+        prompt_ids = prefix_ids + passage_ids + suffix_ids
+        prompt_text = tokenizer.decode(prompt_ids, clean_up_tokenization_spaces=False)
+        prompts.append(prompt_text)
+
+    full_texts = [p + " " + t for p, t in zip(prompts, targets)]
+    toks = tokenizer(full_texts, return_tensors="pt", padding=True, truncation=True, max_length=block_size)
+
+    input_ids = toks["input_ids"]
+    attention_mask = toks["attention_mask"]
+
+    labels = input_ids.clone()
+    labels[attention_mask == 0] = -100
+
+    # mask prompt tokens (loss only on target)
+    ptoks = tokenizer(prompts, return_tensors="pt", padding=True, truncation=True, max_length=block_size)
+    prompt_lens = ptoks["attention_mask"].sum(dim=1).tolist()
+    for i, plen in enumerate(prompt_lens):
+        labels[i, :plen] = -100
+
+    # IMPORTANT sanity check: ensure we actually have supervised tokens
+    valid = (labels != -100).sum(dim=1)
+    if (valid == 0).any():
+        print("[SFT] WARNING: zero supervised tokens in batch:", valid.tolist())
+
+    return {"input_ids": input_ids, "attention_mask": attention_mask, "labels": labels}
     prompts = []
     targets = []
 
@@ -290,14 +338,14 @@ def train_sft(
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
-        shuffle=False,
+        shuffle=True,
         collate_fn=lambda b: collate_sft(b, tokenizer, idf, block_size=block_size, top_k=top_k),
     )
 
     eval_loader = DataLoader(
         eval_dataset,
         batch_size=batch_size,
-        shuffle=False,
+        shuffle=True,
         collate_fn=lambda b: collate_sft(b, tokenizer, idf, block_size=block_size, top_k=top_k),
     )
 
@@ -417,7 +465,7 @@ def parse_args():
     parser.add_argument("--wandb_project", type=str, default=None)
     parser.add_argument("--wandb_run_name", type=str, default=None)
 
-    parser.add_argument("--skip_stage0", type=str, default=None)
+    parser.add_argument("--skip_stage0", action="store_true")
 
     return parser.parse_args()
 
@@ -442,7 +490,7 @@ def main():
 
     probe_prompts = build_probe_prompts(wiki_text, n=3)
 
-    if args.skip_stage0 != None:
+    if args.skip_stage0:
         pretrain_steps = pre_training(
             text_dataset=text,
             output_dir="/workspace/checkpoints/stage0_ckpt",
