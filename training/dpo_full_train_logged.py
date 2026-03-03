@@ -185,9 +185,35 @@ def dpo_loss(policy, ref, batch, epoch, max_epochs, alpha0, alpha_k, *, beta, kl
     if kl_weight > 0.0:
         #masks out the prompt and padding tokens
         def _kl_for(ids, attn, labels):
+            # Robustly coerce batch fields to tensors on the right device.
+            # (This also avoids cryptic `RuntimeError: stoi` when something upstream provides string/object arrays.)
+            try:
+                dev = next(policy.parameters()).device
+            except StopIteration:
+                dev = torch.device("cpu")
+            if not torch.is_tensor(ids):
+                ids = torch.as_tensor(ids, dtype=torch.long, device=dev)
+            else:
+                ids = ids.to(device=dev, dtype=torch.long, non_blocking=True)
+            if not torch.is_tensor(attn):
+                attn = torch.as_tensor(attn, dtype=torch.long, device=dev)
+            else:
+                attn = attn.to(device=dev, dtype=torch.long, non_blocking=True)
             pol_logits = policy(input_ids=ids, attention_mask=attn).logits[:, :-1, :]  # [B,T-1,V]
             with torch.no_grad():
-                ref_logits = ref(input_ids=ids, attention_mask=attn).logits[:, :-1, :]
+                try:
+                    ref_logits = ref(input_ids=ids, attention_mask=attn).logits[:, :-1, :]
+                except Exception as ex:
+                    # Dump minimal debugging info before re-raising
+                    try:
+                        print('[DPO][KL] ref forward failed:', type(ex).__name__, str(ex))
+                        print('[DPO][KL] ids:', type(ids), getattr(ids, 'dtype', None), getattr(ids, 'shape', None), getattr(ids, 'device', None))
+                        print('[DPO][KL] attn:', type(attn), getattr(attn, 'dtype', None), getattr(attn, 'shape', None), getattr(attn, 'device', None))
+                        if torch.is_tensor(ids):
+                            print('[DPO][KL] ids min/max:', ids.min().item(), ids.max().item())
+                    except Exception:
+                        pass
+                    raise
 
             valid = (labels[:, 1:] != -100)  # [B,T-1], ignore prompt + padding (your masking uses -100)
 
