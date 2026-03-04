@@ -483,13 +483,37 @@ def main():
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
 
-    ##testing to see that stage0_checkpoint makes
-    prompt = "Hello, my name is"
-    inputs = tokenizer(prompt, return_tensors="pt").to(device)
+    def quick_debug_generations(model, tokenizer, device):
+        model.eval()
+        model_device = next(model.parameters()).device
 
-    out = model.generate(**inputs, max_new_tokens=20, do_sample=False)
+        # 1) Sanity: plain English prompt
+        prompt1 = "Hello, my name is"
+        enc1 = tokenizer(prompt1, return_tensors="pt")
+        enc1 = {k: v.to(model_device) for k, v in enc1.items()}
+        with torch.no_grad():
+            gen1 = model.generate(**enc1, max_new_tokens=20, do_sample=False)
+        print("\n=== [DEBUG] HELLO PROMPT (greedy) ===")
+        print(tokenizer.decode(gen1[0], skip_special_tokens=True))
 
-    print(tokenizer.decode(out[0]))
+        # 2) Your keyword-summary prompt (use a real passage)
+        passage = ("Or maybe whether a red light or a blue light shows up depends on an "
+                "individual coin flip in each box. How can we tell?")
+        prompt2 = f"Keywords summary.\nText: {passage}\nOutput:"
+        enc2 = tokenizer(prompt2, return_tensors="pt")
+        enc2 = {k: v.to(model_device) for k, v in enc2.items()}
+        with torch.no_grad():
+            gen2 = model.generate(**enc2, max_new_tokens=64, do_sample=False)
+
+        # Print ONLY what was generated (not the prompt)
+        new_tokens = gen2[0, enc2["input_ids"].shape[1]:]
+        print("\n=== [DEBUG] KEYWORD PROMPT (greedy, completion only) ===")
+        print("PROMPT (first 120):", prompt2[:120].replace("\n", "\\n"))
+        print("COMPLETION:", tokenizer.decode(new_tokens, skip_special_tokens=True))
+
+        model.train()
+
+    quick_debug_generations(model, tokenizer, device)
 
     train_sft(
         pretrain_steps,
