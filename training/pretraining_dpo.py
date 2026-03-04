@@ -483,6 +483,14 @@ def main():
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
 
+    ##testing to see that stage0_checkpoint makes
+    prompt = "Hello, my name is"
+    inputs = tokenizer(prompt, return_tensors="pt").to(device)
+
+    out = model.generate(**inputs, max_new_tokens=20, do_sample=False)
+
+    print(tokenizer.decode(out[0]))
+
     train_sft(
         pretrain_steps,
         model=model,
