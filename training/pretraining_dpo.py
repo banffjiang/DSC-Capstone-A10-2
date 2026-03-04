@@ -395,7 +395,7 @@ def train_sft(
                     for ebatch in eval_loader:
                         ebatch = {k: (v.to(device) if isinstance(v, torch.Tensor) else v) for k, v in ebatch.items()}
                         eloss = model(**ebatch).loss
-                        total += float(eloss.item())
+                        total += eloss.detach().cpu().item()
                         nb += 1
                 eval_loss = total / max(1, nb)
                 model.train()
