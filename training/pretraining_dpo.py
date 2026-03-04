@@ -381,6 +381,8 @@ def train_sft(
                         no_repeat_ngram_size=3,
                     )
 
+                    print("[EVAL] device:", device, "type:", type(device), "repr:", repr(device))
+
                     print("\n=== [TFIDF DEBUG] step", global_step, "===\n")
                     print("SRC (first 200):", src[:200])
                     print("TFIDF TARGET:", target)
