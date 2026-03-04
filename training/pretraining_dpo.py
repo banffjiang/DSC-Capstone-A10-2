@@ -440,7 +440,7 @@ def parse_args():
 
 def main():
     args = parse_args()
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     set_global_seed(RANDOM_SEED)
 
     wandb.init(
