@@ -571,9 +571,6 @@ def train_dpo(
                                     "train/nll_loss_raw": float(loss_nll.item()),
                                     "epoch": e,
                                     "global_step": micro_step,
-                                    "bertscore/score_a": score_a,
-                                    "bertscore/score_b": score_b,
-                                    "bertscore/gap": gap,
                                     "optimizer_steps_total": optimizer_step,
                                     "dpo_optimizer_step": dpo_optimizer_step,
                                     "schedule/mode": 0, 
@@ -653,6 +650,17 @@ def train_dpo(
                             score_a = float(preferred["score_a"])
                             score_b = float(preferred["score_b"])
                             gap = abs(score_a - score_b)
+
+                            if wandb_project is not None:
+                                wandb.log({
+                                    "bertscore/score_a": score_a,
+                                    "bertscore/score_b": score_b,
+                                    "bertscore/gap": gap,
+                                    "epoch": e,
+                                    "global_step": micro_step,
+                                    "optimizer_steps_total": optimizer_step,
+                                    "dpo_optimizer_step": dpo_optimizer_step,
+                                })
 
                             if gap < score_gap_min:
                                 skipped += 1
