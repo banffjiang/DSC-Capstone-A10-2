@@ -286,6 +286,22 @@ def quick_tfidf_sample(dataset, idf, *, idx=0, top_k=8):
     target = tfidf_target(src, idf, top_k=top_k)
     return src, prompt, target
 
+def move_batch_to_model(batch, model):
+    model_device = next(model.parameters()).device
+    out = {}
+    for k, v in batch.items():
+        if torch.is_tensor(v):
+            try:
+                out[k] = v.to(model_device)
+            except Exception as e:
+                print("[MOVE FAIL] key:", k)
+                print("  tensor dtype:", v.dtype, "shape:", tuple(v.shape), "from:", v.device)
+                print("  model_device:", model_device, "type:", type(model_device))
+                raise
+        else:
+            out[k] = v
+    return out
+
 def train_sft(
     step_offset,
     model,
@@ -322,7 +338,7 @@ def train_sft(
     for epoch in range(num_epochs):
         for batch in train_loader:
             global_step += 1
-            batch = {k: (v.to(device) if torch.is_tensor(v) else v) for k, v in batch.items()}
+            batch = move_batch_to_model(batch, model)
 
             loss = model(**batch).loss
             loss.backward()
@@ -395,7 +411,7 @@ def train_sft(
                 nb = 0
                 with torch.no_grad():
                     for ebatch in eval_loader:
-                        ebatch = {k: (v.to(device) if isinstance(v, torch.Tensor) else v) for k, v in ebatch.items()}
+                        ebatch = move_batch_to_model(ebatch, model)
                         eloss = model(**ebatch).loss
                         total += eloss.detach().cpu().item()
                         nb += 1
