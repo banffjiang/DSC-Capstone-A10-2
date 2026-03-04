@@ -66,7 +66,7 @@ spec:
               --temperature 0.7 \
               --top_p 0.9 \
               --repetition_penalty 1.1 \
-              --kl_weight 0.02 \
+              --kl_weight 0.00 \
               --wandb_project dpo-training \
               --wandb_run_name dpo-debug
 

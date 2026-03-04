@@ -223,13 +223,30 @@ def tfidf_target(src: str, idf: dict, top_k: int = 8, min_len: int = 2):
     return " ".join(out) if out else "something"
 
 def collate_sft(batch, tokenizer, idf, block_size=256, top_k=8):
-    prompts = []
-    targets = []
+    prefix = "Keywords summary.\nText: "
+    suffix = "\nOutput:"
 
+    prefix_ids = tokenizer(prefix, add_special_tokens=False)["input_ids"]
+    suffix_ids = tokenizer(suffix, add_special_tokens=False)["input_ids"]
+
+    prompts, targets = [], []
     for e in batch:
         src = e["passage"]
-        prompts.append(make_prompt(src))
-        targets.append(tfidf_target(src, idf, top_k=top_k))
+        target = tfidf_target(src, idf, top_k=top_k)
+        targets.append(target)
+
+        target_ids = tokenizer(" " + target, add_special_tokens=False)["input_ids"]
+
+        budget = block_size - (len(prefix_ids) + len(suffix_ids) + len(target_ids))
+        if budget < 1:
+            max_target = max(1, block_size - (len(prefix_ids) + len(suffix_ids) + 1))
+            target_ids = target_ids[:max_target]
+            budget = block_size - (len(prefix_ids) + len(suffix_ids) + len(target_ids))
+
+        passage_ids = tokenizer(src, add_special_tokens=False)["input_ids"][:budget]
+        prompt_ids = prefix_ids + passage_ids + suffix_ids
+        prompt_text = tokenizer.decode(prompt_ids, clean_up_tokenization_spaces=False)
+        prompts.append(prompt_text)
 
     full_texts = [p + " " + t for p, t in zip(prompts, targets)]
 
