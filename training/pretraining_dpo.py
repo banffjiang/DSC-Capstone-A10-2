@@ -148,8 +148,8 @@ def pre_training(
     for epoch in range(100): #will break when steps are reached
         for batch in dl:
             step += 1
-            batch = {k: (v.to(device) if torch.is_tensor(v) else v) for k, v in batch.items()}
-
+            batch = batch = move_batch_to_model(batch, model)
+            
             out = model(**batch)
             loss = out.loss
             loss.backward()

@@ -62,7 +62,6 @@ spec:
               --lr 1e-5 \
               --warmup_steps 200 \
               --total_steps 5000 \
-              --skip_stage0 \
             
             echo "checkpoints saved to /workspace/checkpoints"
             ls -lh /workspace/checkpoints/
