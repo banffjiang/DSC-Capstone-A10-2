@@ -62,7 +62,7 @@ spec:
               --lr 1e-5 \
               --warmup_steps 200 \
               --total_steps 5000 \
-              --skip-stage0 \
+              --skip_stage0 \
             
             echo "checkpoints saved to /workspace/checkpoints"
             ls -lh /workspace/checkpoints/
@@ -82,8 +82,8 @@ spec:
           value: "0"
         - name: PYTHONPATH
           value: /workspace/repo
-        # - name: CUDA_LAUNCH_BLOCKING
-        #   value: "1"
+        - name: CUDA_LAUNCH_BLOCKING
+          value: "1"
         - name: TORCH_SHOW_CPP_STACKTRACES
           value: "1"
         - name: HF_HOME

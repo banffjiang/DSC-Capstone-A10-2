@@ -438,15 +438,16 @@ def train_sft(
 
             if global_step % 500 == 0:
                 model.eval()
-                total = 0.0
+                total = torch.zeros((), device=next(model.parameters()).device)
                 nb = 0
                 with torch.no_grad():
                     for ebatch in eval_loader:
                         ebatch = move_batch_to_model(ebatch, model)
                         eloss = model(**ebatch).loss
-                        total += safe_item(eloss, name="eloss")
+                        torch.cuda.synchronize()
+                        total += eloss.detach()
                         nb += 1
-                eval_loss = total / max(1, nb)
+                eval_loss = (total / max(1, nb)).detach().float().cpu().numpy().item()
                 model.train()
 
                 print({"epoch": epoch, "step": global_step, "eval_loss": eval_loss})
