@@ -264,7 +264,7 @@ def collate_sft(batch, tokenizer, idf, block_size=256, top_k=8):
 
     labels = input_ids.clone()
     labels[attention_mask == 0] = -100
-    
+
     for i, prompt in enumerate(prompts):
         prompt_enc = tokenizer(prompt, add_special_tokens=False)["input_ids"]
         plen = min(len(prompt_enc), block_size)
@@ -343,6 +343,7 @@ def train_sft(
     top_k=8,
     batch_size=16,
     num_epochs=3,
+    resume_step=0
 ):
     model.train()
 
@@ -364,6 +365,10 @@ def train_sft(
     for epoch in range(num_epochs):
         for batch in train_loader:
             global_step += 1
+            
+            if global_step < resume_step: #skip so that we can catch up to step left on
+                continue
+
             batch = move_batch_to_model(batch, model)
 
             loss = model(**batch).loss
@@ -432,6 +437,20 @@ def train_sft(
                     print()
 
             if global_step % 500 == 0:
+                #saves a model checkpoint
+                ckpt_path = f"/workspace/checkpoints/stage1_step{global_step}"
+                model.save_pretrained(ckpt_path)
+                tokenizer.save_pretrained(ckpt_path)
+                print(f"[CKPT] Saved checkpoint to {ckpt_path}")
+                
+                # Keep only the last 2 checkpoints
+                import shutil
+                old_step = global_step - 1000
+                old_path = Path(f"/workspace/checkpoints/stage1_step{old_step}")
+                if old_path.exists():
+                    shutil.rmtree(old_path)
+                    print(f"[CKPT] Removed old checkpoint {old_path}")
+
                 model.eval()
                 total = torch.zeros((), device=next(model.parameters()).device)
                 nb = 0
@@ -479,7 +498,10 @@ def parse_args():
     parser.add_argument("--wandb_project", type=str, default=None)
     parser.add_argument("--wandb_run_name", type=str, default=None)
 
+    #checkpoint training stuff
     parser.add_argument("--skip_stage0", action="store_true")
+    parser.add_argument("--resume_from", type=str, default=None)
+    parser.add_argument("--resume_step", type=int, default=0)
 
     return parser.parse_args()
 
@@ -520,11 +542,18 @@ def main():
             device=device,
         )
 
-    tokenizer = AutoTokenizer.from_pretrained("/workspace/checkpoints/stage0_ckpt")
+    if args.resume_from:
+        print(f"[RESUME] Loading checkpoint from {args.resume_from} at step {args.resume_step}")
+        load_path = args.resume_from
+        pretrain_steps = args.resume_step  # wandb step offset stays correct
+    else:
+        load_path = "/workspace/checkpoints/stage0_ckpt"
+
+    tokenizer = AutoTokenizer.from_pretrained(load_path)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    model = AutoModelForCausalLM.from_pretrained("/workspace/checkpoints/stage0_ckpt").to(device)
+    model = AutoModelForCausalLM.from_pretrained(load_path).to(device)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
 
@@ -574,6 +603,7 @@ def main():
         top_k=args.top_k,
         batch_size=args.batch_size,
         num_epochs=args.epochs,
+        resume_step=args.resume_step
     )
 
     stage1 = "/workspace/checkpoints/stage1_sft_ckpt"
