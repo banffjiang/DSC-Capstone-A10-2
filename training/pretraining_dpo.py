@@ -305,6 +305,34 @@ def move_batch_to_model(batch, model):
             out[k] = v
     return out
 
+import builtins
+
+def safe_item(x, *, name="tensor"):
+    # x should be a scalar tensor
+    if not torch.is_tensor(x):
+        print(f"[SAFE_ITEM] {name} is not a tensor:", type(x), repr(x))
+        raise TypeError(f"{name} not tensor")
+
+    try:
+        y = x.detach()
+        # Print shape/dtype/device to catch non-scalar or weird wrappers
+        print(f"[SAFE_ITEM] {name}: shape={tuple(y.shape)} dtype={y.dtype} device={y.device}")
+        # Finite check helps catch NaN/Inf cascades
+        if y.numel() == 1:
+            finite = bool(torch.isfinite(y).all().item())
+            print(f"[SAFE_ITEM] {name}: finite={finite}")
+        else:
+            print(f"[SAFE_ITEM] {name}: numel={y.numel()} (NOT SCALAR)")
+
+        # Builtin check catches accidental shadowing of float/int
+        print("[SAFE_ITEM] float builtin?", float is builtins.float, float)
+        print("[SAFE_ITEM] int builtin?", int is builtins.int, int)
+
+        return y.cpu().item()
+    except Exception as e:
+        print(f"[SAFE_ITEM] failed converting {name} via .cpu().item():", repr(e))
+        raise
+
 def train_sft(
     step_offset,
     model,
@@ -416,7 +444,7 @@ def train_sft(
                     for ebatch in eval_loader:
                         ebatch = move_batch_to_model(ebatch, model)
                         eloss = model(**ebatch).loss
-                        total += eloss.detach().cpu().item()
+                        total += safe_item(eloss, name="eloss")
                         nb += 1
                 eval_loss = total / max(1, nb)
                 model.train()
