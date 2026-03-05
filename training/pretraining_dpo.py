@@ -379,7 +379,7 @@ def train_sft(
             optimizer.step()
             optimizer.zero_grad(set_to_none=True)
 
-            if global_step % 100 == 0:
+            if global_step % 300 == 0:
                 samples = []
                 for j, prompt in enumerate(probe_prompts):
                     gen = quick_generate_sample(
@@ -413,34 +413,36 @@ def train_sft(
                         },
                         step=step_offset + global_step,
                     )
+            
+            torch.cuda.empty_cache()
+            if global_step % 500 == 0:
+                ex = train_dataset[0]
+                src = ex["passage"]
+                prompt = make_prompt(src)
+                target = tfidf_target(src, idf, top_k=top_k)
+
+                model_out = quick_generate_sample(
+                    model,
+                    tokenizer,
+                    prompt,
+                    top_p=0.8,                # tighter decoding for more stable diagnostics
+                    temperature=0.7,
+                    max_new_tokens=24,
+                    repetition_penalty=1.1,
+                    no_repeat_ngram_size=3,
+                )
+
+                torch.cuda.empty_cache() #empty gpu
                 
-                if global_step % 500 == 0:
-                    ex = train_dataset[0]
-                    src = ex["passage"]
-                    prompt = make_prompt(src)
-                    target = tfidf_target(src, idf, top_k=top_k)
+                print("[EVAL] device:", device, "type:", type(device), "repr:", repr(device))
 
-                    model_out = quick_generate_sample(
-                        model,
-                        tokenizer,
-                        prompt,
-                        top_p=0.8,                # tighter decoding for more stable diagnostics
-                        temperature=0.7,
-                        max_new_tokens=24,
-                        repetition_penalty=1.1,
-                        no_repeat_ngram_size=3,
-                    )
+                print("\n=== [TFIDF DEBUG] step", global_step, "===\n")
+                print("SRC (first 200):", src[:200])
+                print("TFIDF TARGET:", target)
+                print("MODEL OUT:", model_out)
+                print()
 
-                    torch.cuda.empty_cache() #empty gpu
-                    
-                    print("[EVAL] device:", device, "type:", type(device), "repr:", repr(device))
-
-                    print("\n=== [TFIDF DEBUG] step", global_step, "===\n")
-                    print("SRC (first 200):", src[:200])
-                    print("TFIDF TARGET:", target)
-                    print("MODEL OUT:", model_out)
-                    print()
-
+            torch.cuda.empty_cache()
             if global_step % 500 == 0:
                 #saves a model checkpoint
                 ckpt_path = f"/workspace/checkpoints/stage1_step{global_step}"

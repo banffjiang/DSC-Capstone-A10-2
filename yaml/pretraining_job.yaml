@@ -63,6 +63,8 @@ spec:
               --warmup_steps 200 \
               --total_steps 5000 \
               --skip_stage0 \
+              --resume_from /workspace/checkpoints/stage1_step3500 \
+              --resume_step 3500
             
             echo "checkpoints saved to /workspace/checkpoints"
             ls -lh /workspace/checkpoints/
@@ -103,7 +105,7 @@ spec:
         
         resources:
           requests:
-            memory: "16Gi"
+            memory: "24Gi"
             cpu: "8"
             #ephemeral-storage: "1Gi"
             nvidia.com/gpu: "1"

@@ -113,6 +113,7 @@ def sequential_log_prob(model, ids, attn_mask, labels):
     return token_log_probs.sum(dim=1)
 
 def collate_lm(tokenizer, texts, *, max_length):
+    texts = [t + tokenizer.eos_token for t in texts]
     enc = tokenizer(
         texts,
         padding=True,
