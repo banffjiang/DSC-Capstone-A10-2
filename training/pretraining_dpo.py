@@ -465,10 +465,9 @@ def train_sft(
                     for ebatch in eval_loader:
                         ebatch = move_batch_to_model(ebatch, model)
                         eloss = model(**ebatch).loss
-                        torch.cuda.synchronize()
                         total += eloss.detach()
                         nb += 1
-                eval_loss = (total / max(1, nb)).detach().float().cpu().numpy().item()
+                eval_loss = (total / max(1, nb)).item()
                 model.train()
 
                 print({"epoch": epoch, "step": global_step, "eval_loss": eval_loss})
@@ -552,7 +551,6 @@ def main():
     if args.resume_from:
         print(f"[RESUME] Loading checkpoint from {args.resume_from} at step {args.resume_step}")
         load_path = args.resume_from
-        pretrain_steps = args.resume_step  # wandb step offset stays correct
     else:
         load_path = "/workspace/checkpoints/stage0_ckpt"
 
