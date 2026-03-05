@@ -186,6 +186,7 @@ def pre_training(
                         no_repeat_ngram_size=3,
                     )
                     samples.append((j, gen))
+                torch.cuda.empty_cache() #empty gpu
 
                 if step % 500 == 0:
                     print("\n=== Pre-training samples @ step", step, "===\n")
@@ -393,6 +394,8 @@ def train_sft(
                     )
                     samples.append((j, gen))
 
+                    torch.cuda.empty_cache() #empty gpu
+
                 print("\n=== [SFT] samples @ step", global_step, "===\n")
                 for j, gen in samples:
                     print(f"[probe {j}]\n{gen}\n")
@@ -428,6 +431,8 @@ def train_sft(
                         no_repeat_ngram_size=3,
                     )
 
+                    torch.cuda.empty_cache() #empty gpu
+                    
                     print("[EVAL] device:", device, "type:", type(device), "repr:", repr(device))
 
                     print("\n=== [TFIDF DEBUG] step", global_step, "===\n")
