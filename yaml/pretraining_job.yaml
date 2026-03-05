@@ -82,8 +82,8 @@ spec:
           value: "0"
         - name: PYTHONPATH
           value: /workspace/repo
-        - name: CUDA_LAUNCH_BLOCKING
-          value: "1"
+        # - name: CUDA_LAUNCH_BLOCKING
+        #   value: "1"
         - name: TORCH_SHOW_CPP_STACKTRACES
           value: "1"
         - name: HF_HOME

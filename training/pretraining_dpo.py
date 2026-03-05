@@ -239,7 +239,6 @@ def collate_sft(batch, tokenizer, idf, block_size=256, top_k=8):
         targets.append(target)
 
         target_ids = tokenizer(" " + target, add_special_tokens=False)["input_ids"]
-
         budget = block_size - (len(prefix_ids) + len(suffix_ids) + len(target_ids))
         if budget < 1:
             max_target = max(1, block_size - (len(prefix_ids) + len(suffix_ids) + 1))
@@ -264,20 +263,16 @@ def collate_sft(batch, tokenizer, idf, block_size=256, top_k=8):
     attention_mask = toks["attention_mask"]
 
     labels = input_ids.clone()
-    labels[attention_mask == 0] = -100  # ignore padding
-
-    # mask prompt tokens
-    ptoks = tokenizer(
-        prompts,
-        return_tensors="pt",
-        padding=True,
-        truncation=True,
-        max_length=block_size,
-    )
-    prompt_lens = ptoks["attention_mask"].sum(dim=1).tolist()
-
-    for i, plen in enumerate(prompt_lens):
+    labels[attention_mask == 0] = -100
+    
+    for i, prompt in enumerate(prompts):
+        prompt_enc = tokenizer(prompt, add_special_tokens=False)["input_ids"]
+        plen = min(len(prompt_enc), block_size)
         labels[i, :plen] = -100
+        # Safety: if all labels are masked, unmask the last real token
+        if (labels[i] != -100).sum() == 0:
+            last_real = attention_mask[i].nonzero(as_tuple=False)[-1].item()
+            labels[i, last_real] = input_ids[i, last_real]
 
     return {"input_ids": input_ids, "attention_mask": attention_mask, "labels": labels}
 
