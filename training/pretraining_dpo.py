@@ -95,6 +95,8 @@ class PairBatch:
 ####################################################################################################################
 
 def collate_lm(tokenizer, texts, *, max_length):
+    eos = tokenizer.eos_token
+    texts = [t + eos for t in texts]
     enc = tokenizer(
         texts,
         padding=True,
@@ -233,6 +235,7 @@ def collate_sft(batch, tokenizer, idf, block_size=256, top_k=8):
     for e in batch:
         src = e["passage"]
         target = tfidf_target(src, idf, top_k=top_k)
+        target = target + tokenizer.eos_token
         targets.append(target)
 
         target_ids = tokenizer(" " + target, add_special_tokens=False)["input_ids"]
