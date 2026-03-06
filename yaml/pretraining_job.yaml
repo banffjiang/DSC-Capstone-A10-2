@@ -15,7 +15,9 @@ spec:
               - key: nvidia.com/gpu.product
                 operator: In
                 values:
+                - NVIDIA-A10
                 - NVIDIA-A40
+                - NVIDIA-GeForce-RTX-3090
 
       initContainers:
       - name: init-permissions
@@ -61,8 +63,8 @@ spec:
               --warmup_steps 200 \
               --total_steps 5000 \
               --skip_stage0 \
-              --resume_from /workspace/checkpoints/stage1_step3500 \
-              --resume_step 3500
+              --resume_from /workspace/checkpoints/stage1_step9000 \
+              --resume_step 9000
             
             echo "checkpoints saved to /workspace/checkpoints"
             ls -lh /workspace/checkpoints/

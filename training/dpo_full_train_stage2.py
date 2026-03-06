@@ -286,7 +286,7 @@ def inspect_top_p_tokens(model, tokenizer, prompt, top_p, top_n_to_show=20):
             token_str = tokenizer.decode([token_id])
             token_prob = sorted_probs[i].item()
             print(f"{i+1:>2}. '{token_str}'  prob={token_prob:.4f}")
-    model.eval()
+    model.train()
 
 def quick_generate_sample(
     policy,
@@ -734,14 +734,19 @@ def train_dpo(
                 # checkpointing
                 save_interval = 500
                 if optimizer_step % save_interval == 0:
-                    checkpoint_path = os.path.join(output_path, f"checkpoint-{optimizer_step}")
+                    checkpoint_path = os.path.join("/workspace/checkpoints/stage2", f"checkpoint-{optimizer_step}")
                     os.makedirs(checkpoint_path, exist_ok=True)
+                    torch.cuda.empty_cache()
                     policy.save_pretrained(checkpoint_path)
                     tokenizer.save_pretrained(checkpoint_path)
                     print(f"[Checkpoint] Saved at step {optimizer_step}: {checkpoint_path}")
-                    if wandb_project is not None:
-                        wandb.log({"checkpoint_step": optimizer_step, "global_step": micro_step})
-
+                    
+                    old_step = optimizer_step - (2 * save_interval)
+                    old_path = Path(f"/workspace/checkpoints/stage2/checkpoint-{old_step}")
+                    if old_path.exists():
+                        shutil.rmtree(old_path)
+                        print(f"[Checkpoint] Removed old checkpoint {old_path}")
+                        
                 if optimizer_step % 50 == 0:
                     print(f"[Epoch {e+1}] optimizer_step={optimizer_step} | dpo_optimizer_step={dpo_optimizer_step} | Kept={kept} | Skipped={skipped}")
 
@@ -774,7 +779,10 @@ def train_dpo(
                 alpha_t_val = _anneal_alpha_by_steps(dpo_optimizer_step, total_dpo_optimizer_steps_target, alpha, alpha_k)
 
                 with torch.no_grad():
-                    for example in val_examples:
+                    for idx, example in enumerate(val_examples):
+                        if idx % 50 == 0:
+                            torch.cuda.empty_cache() #clear cache for oom
+
                         utterance = example["passage"]
                         prompt = make_prompt(utterance)
                         reference_text = utterance
@@ -889,7 +897,9 @@ def train_dpo(
 
             # qualitative samples
             for i, prompt in enumerate(sample_eval_prompts):
-                inspect_top_p_tokens(policy, tokenizer, prompt, top_p=top_p, top_n_to_show=20)
+                if i==0:
+                    inspect_top_p_tokens(policy, tokenizer, prompt, top_p=top_p, top_n_to_show=20)
+
                 sample = quick_generate_sample(
                     policy,
                     tokenizer,
@@ -902,6 +912,7 @@ def train_dpo(
                 )
                 print(f"\n[Sample {i}]")
                 print(sample)
+            torch.cuda.empty_cache()
 
         # Save final model
         final_path = os.path.join(output_path, "final_model")

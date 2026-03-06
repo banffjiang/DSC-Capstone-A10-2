@@ -71,7 +71,7 @@ spec:
               --top_p 0.9 \
               --repetition_penalty 1.1 \
               --no_repeat_ngram_size 0 \
-              --kl_weight 0.02
+              --kl_weight 0.00
             
             echo "checkpoints saved to /workspace/checkpoints"
             ls -lh /workspace/checkpoints/
