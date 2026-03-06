@@ -48,30 +48,32 @@ spec:
             
             wandb login $WANDB_API_KEY
 
-            unzip -o data/train_100m_passages.zip -d data
-
             python -m training.dpo_full_train_stage2 \
               --init_ckpt /workspace/checkpoints/stage1_sft_ckpt \
               --input_path data/simple_wiki_passages.jsonl \
               --output_path /workspace/checkpoints/dpo_training \
-              --epochs 1 \
-              --batch_size 2 \
-              --grad_accum 1 \
-              --lr 5e-7 \
+              --epochs 5 \
+              --batch_size 4 \
+              --grad_accum 4 \
+              --lr 5e-6 \
               --max_length 256 \
               --nll_warmup_steps 0 \
-              --nll_steps_per_cycle 0 \
+              --nll_steps_per_cycle 2 \
               --dpo_steps_per_cycle 1 \
-              --nll_batch_size 2 \
-              --score_gap_min 0.0 \
-              --max_pair_similarity 0.99 \
-              --max_resample_tries 0 \
-              --max_new_tokens 16 \
+              --nll_batch_size 4 \
+              --score_gap_min 0.02 \
+              --max_pair_similarity 0.8 \
+              --max_resample_tries 4 \
+              --max_new_tokens 32 \
               --temperature 0.7 \
               --top_p 0.9 \
               --repetition_penalty 1.1 \
-              --no_repeat_ngram_size 0 \
-              --kl_weight 0.00
+              --no_repeat_ngram_size 1 \
+              --kl_weight 0.00 \
+              --wandb_project dpo-training \
+              --wandb_run_name dpo-stage2-run1 \
+              --alpha_k 5 \
+              --alpha 0.1
             
             echo "checkpoints saved to /workspace/checkpoints"
             ls -lh /workspace/checkpoints/

@@ -647,6 +647,17 @@ def train_dpo(
                             score_b = float(preferred["score_b"])
                             gap = abs(score_a - score_b)
 
+                            if wandb_project is not None:
+                                wandb.log({
+                                    "bertscore/score_a": score_a,
+                                    "bertscore/score_b": score_b,
+                                    "bertscore/gap": gap,
+                                    "epoch": e,
+                                    "global_step": micro_step,
+                                    "optimizer_steps_total": optimizer_step,
+                                    "dpo_optimizer_step": dpo_optimizer_step,
+                                })
+
                             if gap < score_gap_min:
                                 skipped += 1
                                 total_skipped += 1
@@ -746,6 +757,33 @@ def train_dpo(
                     if old_path.exists():
                         shutil.rmtree(old_path)
                         print(f"[Checkpoint] Removed old checkpoint {old_path}")
+
+                if optimizer_step % 500 == 1: #offset to avoid oom
+                    torch.cuda.empty_cache()
+                    policy.eval()
+                    print(f"\n=== [Generation Samples @ optimizer_step {optimizer_step}] ===")
+                    for i, prompt in enumerate(sample_eval_prompts):
+                        inspect_top_p_tokens(policy, tokenizer, prompt, top_p=top_p, top_n_to_show=10)
+                        sample = quick_generate_sample(
+                            policy,
+                            tokenizer,
+                            prompt,
+                            top_p=top_p,
+                            temperature=temperature,
+                            max_new_tokens=max_new_tokens,
+                            repetition_penalty=repetition_penalty,
+                            no_repeat_ngram_size=no_repeat_ngram_size,
+                        )
+                        print(f"[Prompt {i}]: {prompt}")
+                        print(f"[Sample {i}]: {sample}")
+                        if wandb_project is not None:
+                            wandb.log({
+                                f"sample/prompt_{i}": prompt,
+                                f"sample/generation_{i}": sample,
+                                "global_step": micro_step,
+                            })
+                    torch.cuda.empty_cache()
+                    policy.train()
                         
                 if optimizer_step % 50 == 0:
                     print(f"[Epoch {e+1}] optimizer_step={optimizer_step} | dpo_optimizer_step={dpo_optimizer_step} | Kept={kept} | Skipped={skipped}")
