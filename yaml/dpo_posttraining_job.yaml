@@ -65,12 +65,11 @@ spec:
               --candidate_b_temp 1.1 \
               --max_pair_similarity 0.75 \
               --max_resample_tries 6 \
-              --max_new_tokens 32 \
+              --max_new_tokens 48 \
               --temperature 0.7 \
               --top_p 0.9 \
               --repetition_penalty 1.1 \
-              --no_repeat_ngram_size 1 \
-              --kl_weight 0.00 \
+              --no_repeat_ngram_size 2 \
               --wandb_project dpo-training \
               --wandb_run_name dpo-stage2-run1 \
               --alpha_k 5 \

@@ -171,25 +171,16 @@ def kl_tokenwise(policy_logits, ref_logits, mask):
 
 def dpo_loss(
     policy,
-    ref,
     batch,
     alpha_t,
     *,
     beta,
-    kl_last_k=128,
-    kl_weight=0.01,
-    kl_chosen_only=False,
-    compute_kl=True,
     logit_clamp=50.0,
 ):
     pi_chosen = sequential_log_prob(policy, batch.ids_c, batch.attn_c, batch.labels_c)
     pi_rejected = sequential_log_prob(policy, batch.ids_r, batch.attn_r, batch.labels_r)
 
-    with torch.no_grad():
-        ref_chosen = sequential_log_prob(ref, batch.ids_c, batch.attn_c, batch.labels_c)
-        ref_rejected = sequential_log_prob(ref, batch.ids_r, batch.attn_r, batch.labels_r)
-
-    pref_logits = (pi_chosen - pi_rejected) - (ref_chosen - ref_rejected)
+    pref_logits = pi_chosen - pi_rejected
 
     with torch.no_grad():
         len_c = _completion_lengths(batch.labels_c).float()
@@ -202,38 +193,8 @@ def dpo_loss(
 
     loss = -F.logsigmoid(logits).mean()
 
-    loss_kl = None
-    if compute_kl and kl_weight > 0.0:
-        def _kl_for(ids, attn, labels):
-            pol_logits = policy(input_ids=ids, attention_mask=attn).logits[:, :-1, :]
-            with torch.no_grad():
-                ref_logits = ref(input_ids=ids, attention_mask=attn).logits[:, :-1, :]
-
-            valid = (labels[:, 1:] != -100)
-
-            if kl_last_k is not None:
-                pol_logits = pol_logits[:, -kl_last_k:, :]
-                ref_logits = ref_logits[:, -kl_last_k:, :]
-                valid = valid[:, -kl_last_k:]
-
-            return kl_tokenwise(pol_logits, ref_logits, valid)
-
-        kl_c = _kl_for(batch.ids_c, batch.attn_c, batch.labels_c)
-        if kl_chosen_only:
-            loss_kl = kl_c
-        else:
-            kl_r = _kl_for(batch.ids_r, batch.attn_r, batch.labels_r)
-            loss_kl = 0.5 * (kl_c + kl_r)
-
-        loss = loss + kl_weight * loss_kl
-
-    def _check_finite(name, t):
-        if not torch.isfinite(t).all():
-            raise RuntimeError(f"{name} has NaN/Inf")
-
-    _check_finite("loss_total", loss)
-    if loss_kl is not None:
-        _check_finite("loss_kl", loss_kl)
+    if not torch.isfinite(loss).all():
+        raise RuntimeError("loss has NaN/Inf")
 
     metrics = {
         "loss": float(loss.item()),
@@ -243,8 +204,6 @@ def dpo_loss(
         "len_chosen_mean": float(len_c.mean().item()),
         "len_rejected_mean": float(len_r.mean().item()),
     }
-    if loss_kl is not None:
-        metrics["loss_kl"] = float(loss_kl.item())
 
     return loss, metrics
 
@@ -437,20 +396,14 @@ def train_dpo(
             #Load from Stage1 checkpoint
             tokenizer = AutoTokenizer.from_pretrained(init_ckpt)
             policy = AutoModelForCausalLM.from_pretrained(init_ckpt).to(device)
-            reference = AutoModelForCausalLM.from_pretrained(init_ckpt).to(device)
         else:
             #random init from model config
             tokenizer = AutoTokenizer.from_pretrained(policy_model)
             config = AutoConfig.from_pretrained(policy_model)
             policy = AutoModelForCausalLM.from_config(config).to(device)
-            reference = AutoModelForCausalLM.from_config(config).to(device)
 
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
-
-        reference.eval()
-        for p in reference.parameters():
-            p.requires_grad_(False)
         
         #training the randomized model
         nll_batch_size = nll_batch_size or batch_size
@@ -577,10 +530,6 @@ def train_dpo(
                     torch.nn.utils.clip_grad_norm_(policy.parameters(), 1.0)
                     optimizer.step()
 
-                    with torch.no_grad():
-                        for p, pr in zip(policy.parameters(), reference.parameters()):
-                            pr.mul_(ema_decay).add_(p, alpha=1.0 - ema_decay)
-
                     optimizer_step += 1
                     torch.cuda.empty_cache()
 
@@ -669,7 +618,7 @@ def train_dpo(
                         compute_kl = (kl_weight > 0.0) and ((dpo_optimizer_step % KL_CHECK) == 0)
 
                         loss, metrics = dpo_loss(
-                            policy, reference, batch,
+                            policy, batch,
                             alpha_t,
                             beta=beta,
                             kl_last_k=kl_last_k,
@@ -715,10 +664,6 @@ def train_dpo(
 
                     torch.nn.utils.clip_grad_norm_(policy.parameters(), 1.0)
                     optimizer.step()
-
-                    with torch.no_grad():
-                        for p, pr in zip(policy.parameters(), reference.parameters()):
-                            pr.mul_(ema_decay).add_(p, alpha=1.0 - ema_decay)
 
                     optimizer_step += 1
                     dpo_optimizer_step += 1
@@ -860,7 +805,7 @@ def train_dpo(
                                 vb.ids_r.to(device), vb.attn_r.to(device), vb.labels_r.to(device),
                             )
                             vloss, _ = dpo_loss(
-                                policy, reference, vb,
+                                policy, vb,
                                 alpha_t_val,
                                 beta=beta,
                                 kl_last_k=kl_last_k,
@@ -997,12 +942,6 @@ def parse_args():
     parser.add_argument("--nll_steps_per_cycle", type=int, default=2)
     parser.add_argument("--dpo_steps_per_cycle", type=int, default=1)
     parser.add_argument("--nll_batch_size", type=int, default=8)
-
-    #kl stuff
-    parser.add_argument("--kl_weight", type=float, default=0.01)
-    parser.add_argument("--ema_decay", type=float, default=0.995)
-    parser.add_argument("--kl_chosen_only", action="store_true")
-    parser.add_argument("--kl_last_k", type=int, default=128)
     
 
     return parser.parse_args()
