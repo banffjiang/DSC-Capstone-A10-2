@@ -581,12 +581,14 @@ def train_dpo(
                             pr.mul_(ema_decay).add_(p, alpha=1.0 - ema_decay)
 
                     optimizer_step += 1
+                    torch.cuda.empty_cache()
 
                 else:
                     did_any_dpo = False
 
                     for _ in range(grad_accum):
                         prompts, chosen, rejected = [], [], []
+                        batch_scores_a, batch_scores_b, batch_gaps = [], [], []
 
                         # Fill one DPO batch
                         while len(prompts) < batch_size and ex_i < len(train_examples):
@@ -647,16 +649,9 @@ def train_dpo(
                             score_b = float(preferred["score_b"])
                             gap = abs(score_a - score_b)
 
-                            if wandb_project is not None:
-                                wandb.log({
-                                    "bertscore/score_a": score_a,
-                                    "bertscore/score_b": score_b,
-                                    "bertscore/gap": gap,
-                                    "epoch": e,
-                                    "global_step": micro_step,
-                                    "optimizer_steps_total": optimizer_step,
-                                    "dpo_optimizer_step": dpo_optimizer_step,
-                                })
+                            batch_scores_a.append(score_a)
+                            batch_scores_b.append(score_b)
+                            batch_gaps.append(gap)
 
                             if gap < score_gap_min:
                                 skipped += 1
@@ -726,7 +721,11 @@ def train_dpo(
                                 "dropped_after_collate_pairs": dropped_after_collate,
                                 "total_kept": total_kept,
                                 "total_skipped": total_skipped,
-                                "total_dropped_after_collate_pairs": total_dropped_after_collate
+                                "total_dropped_after_collate_pairs": total_dropped_after_collate,
+                                "bertscore/score_a_mean": sum(batch_scores_a) / max(1, len(batch_scores_a)),
+                                "bertscore/score_b_mean": sum(batch_scores_b) / max(1, len(batch_scores_b)),
+                                "bertscore/gap_mean": sum(batch_gaps) / max(1, len(batch_gaps)),
+                                "global_step": micro_step,
                             })
 
                     if not did_any_dpo:
@@ -741,6 +740,8 @@ def train_dpo(
 
                     optimizer_step += 1
                     dpo_optimizer_step += 1
+
+                    torch.cuda.empty_cache()
 
                 # checkpointing
                 save_interval = 500
@@ -758,7 +759,7 @@ def train_dpo(
                         shutil.rmtree(old_path)
                         print(f"[Checkpoint] Removed old checkpoint {old_path}")
 
-                if optimizer_step % 500 == 1: #offset to avoid oom
+                if optimizer_step % 500 == 200: #offset to avoid oom
                     torch.cuda.empty_cache()
                     policy.eval()
                     print(f"\n=== [Generation Samples @ optimizer_step {optimizer_step}] ===")
@@ -857,7 +858,8 @@ def train_dpo(
                             similarity = jaccard_ngrams(candidate_a, candidate_b, n=2)
                             if similarity <= max_pair_similarity:
                                 break
-
+                        
+                        torch.cuda.empty_cache()
                         preferred = listener.prefer(candidate_a, candidate_b, reference_text)
                         gap = abs(float(preferred["score_a"]) - float(preferred["score_b"]))
                         val_gaps.append(gap)
