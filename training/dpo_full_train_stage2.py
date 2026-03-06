@@ -433,7 +433,7 @@ def train_dpo(
         optimizer = torch.optim.AdamW(policy.parameters(), lr=lr)
 
         print(f"[Data] Loading data from: {input_path}")
-        examples = list(SimpleWikiPassageLoader(path=input_path, limit=None))
+        examples = list(SimpleWikiPassageLoader(path=input_path, limit=30000))
         train_examples, test_examples = split_train_test_examples(examples, test_size, split_seed)
         print(
             f"[Data] Split sizes -> total={len(examples)}, "
@@ -991,10 +991,6 @@ def main():
         nll_steps_per_cycle=args.nll_steps_per_cycle,
         dpo_steps_per_cycle=args.dpo_steps_per_cycle,
         nll_batch_size=args.nll_batch_size,
-        kl_weight=args.kl_weight,
-        kl_last_k=args.kl_last_k,
-        ema_decay=args.ema_decay,
-        kl_chosen_only=args.kl_chosen_only,
     )
 
 if __name__ == "__main__":
