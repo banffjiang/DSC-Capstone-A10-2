@@ -972,7 +972,7 @@ def parse_args():
     parser.add_argument("--max_new_tokens", type=int, default=16)
     parser.add_argument("--repetition_penalty", type=float, default=1.2)
     parser.add_argument("--no_repeat_ngram_size", type=int, default=0)
-    parser.add_argument("--candidate_b_temp", type=int, default=0.9)
+    parser.add_argument("--candidate_b_temp", type=float, default=0.9)
     
     # Preference filtering arguments
     parser.add_argument("--score_gap_min", type=float, default=1e-4)
