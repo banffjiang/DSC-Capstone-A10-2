@@ -308,10 +308,6 @@ def train_dpo(
         dpo_steps_per_cycle,
         nll_batch_size,
         validation_max_examples,
-        kl_weight,
-        kl_chosen_only,
-        kl_last_k,
-        ema_decay,
         train_loss_ema_alpha,
         train_loss_sma_window,
         wandb_project=None,
@@ -363,11 +359,6 @@ def train_dpo(
                 "dpo_steps_per_cycle": dpo_steps_per_cycle,
                 "nll_batch_size": nll_batch_size,
                 "validation_max_examples": validation_max_examples,
-                "kl_weight": kl_weight,
-                "kl_chosen_only": kl_chosen_only,
-                "kl_last_k": kl_last_k,
-                "ema_decay": ema_decay,
-                "ema_alpha": ema_alpha,
                 "train_loss_sma_window": train_loss_sma_window,
                 "device": device
             }
@@ -615,16 +606,11 @@ def train_dpo(
                         )
 
                         alpha_t = _anneal_alpha_by_steps(dpo_optimizer_step, total_dpo_optimizer_steps_target, alpha, alpha_k)
-                        compute_kl = (kl_weight > 0.0) and ((dpo_optimizer_step % KL_CHECK) == 0)
 
                         loss, metrics = dpo_loss(
                             policy, batch,
                             alpha_t,
                             beta=beta,
-                            kl_last_k=kl_last_k,
-                            kl_weight=kl_weight,
-                            kl_chosen_only=kl_chosen_only,
-                            compute_kl=compute_kl,
                         )
 
                         loss_value = float(loss.item())
@@ -645,7 +631,6 @@ def train_dpo(
                                 "optimizer_steps_total": optimizer_step,
                                 "dpo_optimizer_step": dpo_optimizer_step,
                                 "alpha_t": float(alpha_t),
-                                "kl/compute": int(compute_kl),
                                 **metrics,
                                 "kept_pairs": kept,
                                 "skipped_pairs": skipped,
@@ -808,10 +793,6 @@ def train_dpo(
                                 policy, vb,
                                 alpha_t_val,
                                 beta=beta,
-                                kl_last_k=kl_last_k,
-                                kl_weight=kl_weight,
-                                kl_chosen_only=kl_chosen_only,
-                                compute_kl=False,
                             )
                             val_loss_sum += float(vloss.item())
                             val_loss_n += 1
