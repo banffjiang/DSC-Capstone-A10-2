@@ -334,6 +334,7 @@ def train_dpo(
         max_new_tokens,
         repetition_penalty,
         no_repeat_ngram_size,
+        candidate_b_temp,
         score_gap_min,
         val_score_gap_min,
         max_pair_similarity,
@@ -354,12 +355,6 @@ def train_dpo(
         ema_decay,
         train_loss_ema_alpha,
         train_loss_sma_window,
-        # Generation stabilization (Part 3)
-        gen_warmup_optimizer_steps,
-        gen_warmup_top_p,
-        gen_warmup_temperature,
-        gen_warmup_max_new_tokens,
-        min_gen_tokens,
         wandb_project=None,
         wandb_run_name=None
 ):
@@ -530,7 +525,13 @@ def train_dpo(
             dpo_frac = float(dpo_steps_per_cycle) / float(nll_steps_per_cycle + dpo_steps_per_cycle)
         else:
             dpo_frac = 1.0
+
         total_dpo_optimizer_steps_target = max(1, int(epochs * steps_per_epoch_est * dpo_frac))
+
+        steps_per_epoch_est = max(1, len(train_examples) // batch_size)
+        total_optimizer_steps_est = epochs * steps_per_epoch_est
+        checkpoint_interval = max(1, total_optimizer_steps_est // 15) #creates 15 checkpoints for the eval, might undershoot
+        print(f"[Checkpoint] Estimated total steps: {total_optimizer_steps_est}, saving every {checkpoint_interval} steps")
 
         policy.train()
         total_kept = 0
@@ -599,46 +600,27 @@ def train_dpo(
                             prompt = make_prompt(utterance)
                             reference_text = utterance
 
-                            # Early-stage generation stabilization (Part 3)
-                            if optimizer_step < gen_warmup_optimizer_steps:
-                                _top_p = gen_warmup_top_p
-                                _temp = gen_warmup_temperature
-                                _mxt = gen_warmup_max_new_tokens
-                            else:
-                                _top_p = top_p
-                                _temp = temperature
-                                _mxt = max_new_tokens
-
                             seed_a = torch.randint(0, 2**31 - 1, (1,)).item()
                             candidate_a = generate_summary(
                                 policy, tokenizer, prompt,
-                                top_p=_top_p, temperature=_temp,
-                                max_new_tokens=_mxt,
+                                top_p=top_p, temperature=temperature,
+                                max_new_tokens=max_new_tokens,
                                 repetition_penalty=repetition_penalty,
                                 no_repeat_ngram_size=no_repeat_ngram_size,
                                 seed=seed_a
                             )
-
-                            # Minimum length filter (Part 3)
-                            if min_gen_tokens > 0 and len(tokenizer.encode(candidate_a.strip())) < min_gen_tokens:
-                                skipped += 1
-                                total_skipped += 1
-                                continue
 
                             # Resample candidate_b if too similar to candidate_a
                             for _ in range(max_resample_tries + 1):
                                 seed_b = torch.randint(0, 2**31 - 1, (1,)).item()
                                 candidate_b = generate_summary(
                                     policy, tokenizer, prompt,
-                                    top_p=_top_p, temperature=_temp,
-                                    max_new_tokens=_mxt,
+                                    top_p=top_p, temperature=candidate_b_temp,
+                                    max_new_tokens=max_new_tokens,
                                     repetition_penalty=repetition_penalty,
                                     no_repeat_ngram_size=no_repeat_ngram_size,
                                     seed=seed_b
                                 )
-
-                                if min_gen_tokens > 0 and len(tokenizer.encode(candidate_b.strip())) < min_gen_tokens:
-                                    continue
 
                                 similarity = jaccard_ngrams(candidate_a, candidate_b, n=2)
                                 if similarity <= max_pair_similarity:
@@ -744,20 +726,13 @@ def train_dpo(
                     torch.cuda.empty_cache()
 
                 # checkpointing
-                save_interval = 500
-                if optimizer_step % save_interval == 0:
+                if optimizer_step > 0 and optimizer_step % checkpoint_interval == 0:
                     checkpoint_path = os.path.join("/workspace/checkpoints/stage2", f"checkpoint-{optimizer_step}")
                     os.makedirs(checkpoint_path, exist_ok=True)
                     torch.cuda.empty_cache()
                     policy.save_pretrained(checkpoint_path)
                     tokenizer.save_pretrained(checkpoint_path)
                     print(f"[Checkpoint] Saved at step {optimizer_step}: {checkpoint_path}")
-                    
-                    old_step = optimizer_step - (2 * save_interval)
-                    old_path = Path(f"/workspace/checkpoints/stage2/checkpoint-{old_step}")
-                    if old_path.exists():
-                        shutil.rmtree(old_path)
-                        print(f"[Checkpoint] Removed old checkpoint {old_path}")
 
                 if optimizer_step % 500 == 200: #offset to avoid oom
                     torch.cuda.empty_cache()
@@ -997,13 +972,7 @@ def parse_args():
     parser.add_argument("--max_new_tokens", type=int, default=16)
     parser.add_argument("--repetition_penalty", type=float, default=1.2)
     parser.add_argument("--no_repeat_ngram_size", type=int, default=0)
-
-    # Generation stabilization (Part 3)
-    parser.add_argument("--gen_warmup_optimizer_steps", type=int, default=0, help="For the first N optimizer steps, use the warmup sampling params below for on-policy generation.")
-    parser.add_argument("--gen_warmup_top_p", type=float, default=0.9)
-    parser.add_argument("--gen_warmup_temperature", type=float, default=0.7)
-    parser.add_argument("--gen_warmup_max_new_tokens", type=int, default=16)
-    parser.add_argument("--min_gen_tokens", type=int, default=0, help="Skip candidates whose tokenized length is below this (0 disables).")
+    parser.add_argument("--candidate_b_temp", type=int, default=0.9)
     
     # Preference filtering arguments
     parser.add_argument("--score_gap_min", type=float, default=1e-4)
@@ -1064,6 +1033,7 @@ def main():
         max_new_tokens=args.max_new_tokens,
         repetition_penalty=args.repetition_penalty,
         no_repeat_ngram_size=args.no_repeat_ngram_size,
+        candidate_b_temp=args.candidate_b_temp,
         score_gap_min=args.score_gap_min,
         val_score_gap_min=args.val_score_gap_min,
         max_pair_similarity=args.max_pair_similarity,
@@ -1086,11 +1056,6 @@ def main():
         kl_last_k=args.kl_last_k,
         ema_decay=args.ema_decay,
         kl_chosen_only=args.kl_chosen_only,
-        gen_warmup_optimizer_steps=args.gen_warmup_optimizer_steps,
-        gen_warmup_top_p=args.gen_warmup_top_p,
-        gen_warmup_temperature=args.gen_warmup_temperature,
-        gen_warmup_max_new_tokens=args.gen_warmup_max_new_tokens,
-        min_gen_tokens=args.min_gen_tokens
     )
 
 if __name__ == "__main__":
