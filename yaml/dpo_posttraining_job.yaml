@@ -55,7 +55,7 @@ spec:
               --epochs 3 \
               --batch_size 4 \
               --grad_accum 4 \
-              --lr 5e-6 \
+              --lr 1e-6 \
               --max_length 256 \
               --nll_warmup_steps 0 \
               --nll_steps_per_cycle 1 \
@@ -72,8 +72,9 @@ spec:
               --no_repeat_ngram_size 2 \
               --wandb_project dpo-training \
               --wandb_run_name dpo-stage2-run1 \
-              --alpha_k 5 \
-              --alpha 0.1
+              --alpha_k 8 \
+              --alpha 0.1 \
+              --beta 0.05
             
             echo "checkpoints saved to /workspace/checkpoints"
             ls -lh /workspace/checkpoints/

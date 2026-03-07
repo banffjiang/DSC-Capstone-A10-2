@@ -175,7 +175,7 @@ def dpo_loss(
     alpha_t,
     *,
     beta,
-    logit_clamp=50.0,
+    logit_clamp=10.0,
 ):
     pi_chosen = sequential_log_prob(policy, batch.ids_c, batch.attn_c, batch.labels_c)
     pi_rejected = sequential_log_prob(policy, batch.ids_r, batch.attn_r, batch.labels_r)
