@@ -1,55 +1,71 @@
 method: bayes
 metric:
-  name: val/loss #dpo loss, might need to change to reward func
+  name: train/loss-ema #dpo loss, might need to change to reward func
   goal: minimize
 
-program: training/dpo_with_listener_wandb.py
+program: training.dpo_full_train_stage2
 
 command:
   - ${env}
   - python
+  - "-m"
   - ${program}
-  - --wandb_project=dpo-training
-  - --policy_model=gpt2
-  - --reference_model=gpt2
-  - --input_path=data/simple_wiki_passages.jsonl
-  - --output_path=/workspace/checkpoints
-  - --epochs=5
-  - --max_length=128
-  - --max_new_tokens=32
-  - --top_p=0.9
-  - --temperature=0.8
-  - --repetition_penalty=1.0
-  - --no_repeat_ngram_size=0
-  - --max_pair_similarity=0.7
-  - --max_resample_tries=8
-  - --listener_model_type=roberta-large
-  - --listener_batch_size=8
-  - --run_validation
-  - --validation_max_examples=128
-  - ${args}
-
+  - --init_ckpt
+  - /workspace/checkpoints/stage2/checkpoint-1000
+  - --input_path
+  - /workspace/repo/data/simple_wiki_passages.jsonl
+  - --output_path
+  - /workspace/checkpoints/dpo_training
+  - --epochs
+  - "1"
+  - --batch_size
+  - "4"
+  - --grad_accum
+  - "4"
+  - --max_length
+  - "256"
+  - --nll_warmup_steps
+  - "0"
+  - --nll_steps_per_cycle
+  - "1"
+  - --dpo_steps_per_cycle
+  - "2"
+  - --nll_batch_size
+  - "4"
+  - --candidate_b_temp
+  - "1.1"
+  - --max_pair_similarity
+  - "0.75"
+  - --max_resample_tries
+  - "6"
+  - --max_new_tokens
+  - "48"
+  - --temperature
+  - "0.7"
+  - --top_p
+  - "0.9"
+  - --repetition_penalty
+  - "1.1"
+  - --no_repeat_ngram_size
+  - "2"
+  - --wandb_project
+  - dpo-training
 
 parameters:
   lr:
     distribution: log_uniform_values
     min: 1e-6
-    max: 5e-5
+    max: 1e-5
 
   beta:
     distribution: log_uniform_values
     min: 0.01
-    max: 0.3
+    max: 0.15
 
-  temperature: #might not sweep over, not related to DPO strictly
+  score_gap_min:
     distribution: log_uniform_values
-    min: 0.5
-    max: 1
-
-  top_p: #might not sweep over, not related to DPO strictly
-    distribution: log_uniform_values
-    min: 0.8
-    max: 0.95
+    min: 0.01
+    max: 0.05
 
   alpha:
     distribution: log_uniform_values
@@ -57,7 +73,5 @@ parameters:
     max: 0.3
 
   alpha_k:
-    values: [1, 2, 3, 4]
+    values: [5, 8]
   
-  grad_accum:
-    values: [2, 4, 8]

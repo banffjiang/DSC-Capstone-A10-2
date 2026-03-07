@@ -49,7 +49,7 @@ spec:
             wandb login $WANDB_API_KEY
 
             python -m training.dpo_full_train_stage2 \
-              --init_ckpt /workspace/checkpoints/stage1_sft_ckpt \
+              --init_ckpt /workspace/checkpoints/stage2/checkpoint-1000 \
               --input_path data/simple_wiki_passages.jsonl \
               --output_path /workspace/checkpoints/dpo_training \
               --epochs 3 \

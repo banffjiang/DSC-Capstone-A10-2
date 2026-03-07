@@ -44,15 +44,18 @@ spec:
           args:
             - |
               set -euo pipefail
+              apt-get update && apt-get install -y git
+              rm -rf /workspace/repo  
+              git clone https://github.com/banffjiang/DSC-Capstone-A10-2.git /workspace/repo
               cd /workspace/repo
-              # optional: git clone/update here if needed
+
               python -m venv /workspace/.venv
               source /workspace/.venv/bin/activate
               python -m pip install -U pip
               python -m pip install -r requirements.txt 
               python -c "import torch, transformers; print(torch.__version__, transformers.__version__)"
               nvidia-smi
-              python -m wandb agent lemn-lab/dpo-training/l5n97h21
+              python -m wandb agent lemn-lab/dpo-training/i6e9ilwu
           resources:
             requests:
               cpu: "8"

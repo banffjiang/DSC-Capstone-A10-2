@@ -294,6 +294,7 @@ def train_dpo(
         repetition_penalty,
         no_repeat_ngram_size,
         candidate_b_temp,
+        data_limit,
         score_gap_min,
         val_score_gap_min,
         max_pair_similarity,
@@ -358,6 +359,7 @@ def train_dpo(
                 "nll_steps_per_cycle": nll_steps_per_cycle,
                 "dpo_steps_per_cycle": dpo_steps_per_cycle,
                 "nll_batch_size": nll_batch_size,
+                "data_limit": data_limit,
                 "validation_max_examples": validation_max_examples,
                 "train_loss_sma_window": train_loss_sma_window,
                 "device": device
@@ -424,7 +426,7 @@ def train_dpo(
         optimizer = torch.optim.AdamW(policy.parameters(), lr=lr)
 
         print(f"[Data] Loading data from: {input_path}")
-        examples = list(SimpleWikiPassageLoader(path=input_path, limit=30000))
+        examples = list(SimpleWikiPassageLoader(path=input_path, limit=data_limit))
         train_examples, test_examples = split_train_test_examples(examples, test_size, split_seed)
         print(
             f"[Data] Split sizes -> total={len(examples)}, "
@@ -899,6 +901,7 @@ def parse_args():
     parser.add_argument("--repetition_penalty", type=float, default=1.2)
     parser.add_argument("--no_repeat_ngram_size", type=int, default=0)
     parser.add_argument("--candidate_b_temp", type=float, default=0.9)
+    parser.add_argument("--data_limit", type=int, default=30000)
     
     # Preference filtering arguments
     parser.add_argument("--score_gap_min", type=float, default=1e-4)
@@ -954,6 +957,7 @@ def main():
         repetition_penalty=args.repetition_penalty,
         no_repeat_ngram_size=args.no_repeat_ngram_size,
         candidate_b_temp=args.candidate_b_temp,
+        data_limit=args.data_limit,
         score_gap_min=args.score_gap_min,
         val_score_gap_min=args.val_score_gap_min,
         max_pair_similarity=args.max_pair_similarity,

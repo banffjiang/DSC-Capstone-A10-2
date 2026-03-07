@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pvc-copy
+  namespace: dsc-capstone-25-26
+spec:
+  restartPolicy: Never
+  containers:
+  - name: pvc-copy
+    image: busybox
+    command: ["sh", "-c", "cp -r /workspace/checkpoints/stage2 /source/checkpoints/"]
+    volumeMounts:
+    - mountPath: /workspace
+      name: workspace
+    - mountPath: /source
+      name: source
+  volumes:
+  - name: workspace
+    persistentVolumeClaim:
+      claimName: dpo-full-storage
+  - name: source
+    persistentVolumeClaim:
+      claimName: dpo-sweep-storage
