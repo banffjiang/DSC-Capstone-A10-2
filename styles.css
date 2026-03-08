@@ -293,6 +293,15 @@ main {
   background: linear-gradient(180deg, #ffffff, #f8fbff);
 }
 
+.chart-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #f6f8fc;
+}
+
 .insight-card {
   border: 1px solid var(--line);
   border-radius: 14px;
