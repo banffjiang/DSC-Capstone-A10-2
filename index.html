@@ -74,7 +74,7 @@
       </article>
       <article class="metric">
         <span class="metric__label">Setup</span>
-        <strong>GPT-2 speaker + RoBERTa listener + DPO</strong>
+        <strong>GPT-2 speaker + RoBERTa listener + Direct Preference Optimization (DPO)</strong>
       </article>
       <article class="metric">
         <span class="metric__label">Status</span>
@@ -123,16 +123,16 @@
       <h2>Methods</h2>
       <p class="section-intro">
         The system pairs a generator with a learned evaluator. The generator proposes multiple candidate summaries for the same passage.
-        The listener scores which candidate better preserves meaning, and DPO pushes the speaker toward the preferred candidate while a separate term rewards brevity early in training.
+        The listener scores which candidate better preserves meaning, and Direct Preference Optimization (DPO) pushes the speaker toward the preferred candidate while a separate term rewards brevity early in training.
       </p>
       <div class="cards">
         <article class="card">
           <h3>Data</h3>
           <p>
-            Simple Wikipedia passages from the BabyLM-style setup, preprocessed to JSONL for training and analysis.
+            Mixed BabyLM-style `train_100M` passages (including sources such as Gutenberg, SimpleWiki, CHILDES, OpenSubtitles, Switchboard, and BNC Spoken), preprocessed to JSONL for training and analysis.
             Source data directory: <a href="https://osf.io/ryjfm/" target="_blank" rel="noreferrer">BabyLM OSF</a>.
           </p>
-          <pre><code>{"id": int, "source": "simplewiki", "passage": str}</code></pre>
+          <pre><code>{"id": int, "source": str, "passage": str}</code></pre>
         </article>
         <article class="card">
           <h3>Speaker</h3>
@@ -160,19 +160,35 @@
       </div>
     </section>
 
+    <section id="dpo" class="panel">
+      <h2>What Is DPO?</h2>
+      <p>
+        Direct Preference Optimization (DPO) is a way to train a model from pairwise preferences without training a separate reward model.
+        For each prompt, the model sees a <em>chosen</em> and a <em>rejected</em> output, and learns to increase the log-probability gap in favor of the chosen output.
+      </p>
+      <p>
+        In TeleSpeak, DPO provides the core preference-learning signal, and we combine it with a decaying brevity term.
+        This lets us test whether concise behavior can emerge while still tracking semantic quality.
+      </p>
+    </section>
+
     <section id="objective" class="panel">
       <h2>Training Objective</h2>
-      <p>We combine DPO preference logits with a decaying length advantage term:</p>
-      <pre><code>logits = beta * pref_logits + alpha(t) * len_adv
-L = -log(sigmoid(logits))
+      <p>Current implementation combines preference logits with a step-decayed length advantage term:</p>
+      <pre><code>pref_logits = log pi_theta(y_c|x) - log pi_theta(y_r|x)
 
-pref_logits = (log pi_theta(y_c|x) - log pi_theta(y_r|x))
-            - (log pi_ref(y_c|x)   - log pi_ref(y_r|x))
+alpha_t = alpha_0 * exp(-k * t_step)
+t_step = dpo_step / total_dpo_steps
 
 len_adv = (len_r - len_c) / (len_r + len_c + epsilon)
-alpha(t) = alpha_0 * exp(-k * t)</code></pre>
+
+logits = beta * pref_logits + alpha_t * len_adv
+logits = clamp(logits, -logit_clamp, +logit_clamp)
+
+L = -log(sigmoid(logits))
+</code></pre>
       <p>
-        This design enforces short outputs early, then gradually prioritizes semantic preference learning as training proceeds.
+        In this version, length pressure decays with DPO optimizer steps, and preference logits are computed directly from the policy model.
       </p>
     </section>
 
@@ -180,23 +196,26 @@ alpha(t) = alpha_0 * exp(-k * t)</code></pre>
       <article>
         <h2>Dataset and Validity Notes</h2>
         <p>
-          Current experiments use Simple Wikipedia passages converted into compact passage-level examples. The design goal is to hold semantics roughly constant while letting output length vary.
+          Current experiments use the combined BabyLM `train_100M` corpus converted into compact passage-level examples. The design goal is to train across mixed domains while measuring whether brevity can emerge without semantic collapse.
         </p>
         <ul class="bullet-list">
-          <li>Training source: Simple Wikipedia passages preprocessed into JSONL records.</li>
+          <li>Training source: combined `train_100M` passages preprocessed into JSONL records.</li>
+          <li>Split protocol: train/validation split with fixed seed (0.1 validation in current runs) so comparisons are reproducible.</li>
           <li>Unit of supervision: preference pairs between two candidate summaries of the same passage.</li>
           <li>Validity concern: semantic overlap metrics can overestimate quality when two weak candidates share surface vocabulary.</li>
-          <li>Leakage concern to track in final write-up: avoid evaluating on passages or templates that appear in preference construction.</li>
+          <li>Leakage control: evaluate on held-out passages and keep fixed prompt sets separate from training pair construction.</li>
         </ul>
       </article>
       <article>
-        <h2>Evaluation Plan</h2>
+        <h2>Evaluation Plan (Explicit Protocol)</h2>
         <p>
           Preliminary evaluation from the current run indicates stable optimization throughput, but generation quality is still mixed. The intended benchmark remains whether outputs can be shortened without semantic collapse.
         </p>
         <ul class="bullet-list">
-          <li>Primary metrics: output length, semantic score, and pairwise preference accuracy.</li>
-          <li>Baselines: reference GPT-2 behavior without length pressure and ablations removing listener or decay schedule.</li>
+          <li>Primary metrics: average surprisal, average change in surprisal vs baseline, output length, and pairwise preference accuracy.</li>
+          <li>Baselines: GPT-2/BabyLM-pretrained baseline and TeleSpeak current run.</li>
+          <li>Comparisons: side-by-side baseline vs TeleSpeak on fixed prompts and held-out passages.</li>
+          <li>Ablations: remove listener signal, remove/flatten length decay, and vary pair-filter thresholds.</li>
           <li>Interpretation rule: shorter is only meaningful if semantic retention stays competitive.</li>
           <li>Current status: first epoch run finished (kept 8,726 pairs; skipped 18,274); sweep comparisons pending.</li>
         </ul>
@@ -240,30 +259,30 @@ alpha(t) = alpha_0 * exp(-k * t)</code></pre>
         <div>
           <h2>Charts</h2>
           <p class="section-intro">
-            This section is reserved for the two main training visuals we expect reviewers to inspect first: a perplexity evaluation chart and a training loss chart.
+            This section is reserved for two visuals: a Weights & Biases (W&B) training loss curve and a surprisal comparison figure (baseline vs our model).
           </p>
         </div>
         <span class="status-pill">Add final figures here</span>
       </div>
       <div class="chart-grid">
         <article class="chart-card">
-          <div class="placeholder-figure chart-placeholder" aria-label="Perplexity chart placeholder">
-            <p>Perplexity Evaluation Chart</p>
-            <span>Recommended file: <code>figures/perplexity_eval.png</code></span>
-            <small>Use this to compare baseline, DPO-only, and DPO + length-pressure variants.</small>
+          <div class="placeholder-figure chart-placeholder" aria-label="Surprisal comparison chart placeholder">
+            <p>Surprisal Comparison Chart</p>
+            <span>Recommended file: <code>figures/surprisal_comparison.png</code></span>
+            <small>X-axis: model variant. Y-axis: average surprisal (and delta vs baseline) on the same held-out set.</small>
           </div>
           <p class="caption">
-            Suggested caption: lower perplexity alone is not the goal; interpret it alongside semantic retention and output length so fluency gains are not confused with task success.
+            Suggested caption: lower average surprisal indicates better predictive fit; report both absolute surprisal and change relative to baseline.
           </p>
         </article>
         <article class="chart-card">
           <div class="placeholder-figure chart-placeholder" aria-label="Loss chart placeholder">
             <p>Training Loss Chart</p>
             <span>Recommended file: <code>figures/loss_curve.png</code></span>
-            <small>Plot train and validation loss across steps, with important sweep settings noted in the caption.</small>
+            <small>X-axis: optimizer step. Y-axis: loss. Use W&B export for train/validation curves with sweep settings in caption.</small>
           </div>
           <p class="caption">
-            Suggested caption: use this chart to show optimization stability, whether decay scheduling causes sharp transitions, and which runs are worth discussing in the final results section.
+            Suggested caption: use this chart to show optimization stability and identify which runs are suitable for surprisal evaluation.
           </p>
         </article>
       </div>
@@ -276,40 +295,40 @@ alpha(t) = alpha_0 * exp(-k * t)</code></pre>
           <thead>
             <tr>
               <th>Model Variant</th>
-              <th>Avg. Length</th>
-              <th>Semantic Score</th>
-              <th>Preference Win Rate</th>
+              <th>Avg. Surprisal</th>
+              <th>Avg. Change in Surprisal</th>
+              <th>Notes</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td>GPT-2 baseline</td>
+              <td>GPT-2 / BabyLM-pretrained baseline</td>
               <td>TBD</td>
               <td>TBD</td>
-              <td>TBD</td>
+              <td>Reference model</td>
             </tr>
             <tr>
-              <td>DPO only</td>
+              <td>TeleSpeak (current run)</td>
               <td>TBD</td>
               <td>TBD</td>
-              <td>TBD</td>
+              <td>Compare on same prompts/examples</td>
             </tr>
             <tr>
-              <td>DPO + decaying length term</td>
+              <td>TeleSpeak (best sweep)</td>
               <td>TBD</td>
               <td>TBD</td>
-              <td>TBD</td>
+              <td>Selected from sweep settings</td>
             </tr>
           </tbody>
         </table>
         <p class="caption">
-          Planned comparison table. Final numbers will only be interpreted as positive if shorter outputs maintain competitive semantic quality.
+          Planned comparison table. Report both absolute surprisal and relative change from baseline.
         </p>
       </article>
       <article class="placeholder-figure" aria-label="Result figure placeholder">
-        <p>Figure Placeholder</p>
-        <span>Add training curves, ablations, or example generations here.</span>
-        <small>Recommended: one plot for length trajectory and one plot for semantic retention.</small>
+        <p>Example Comparison Placeholder</p>
+        <span>Add side-by-side outputs from baseline vs TeleSpeak on fixed prompts.</span>
+        <small>Recommended: include one strong case and one failure case with surprisal values.</small>
       </article>
     </section>
 
@@ -318,7 +337,7 @@ alpha(t) = alpha_0 * exp(-k * t)</code></pre>
         <h2>Example Output Format</h2>
         <div class="example-block">
           <p><strong>Input passage</strong></p>
-          <p>A Simple Wikipedia passage describing an event or concept.</p>
+          <p>A held-out passage from the mixed `train_100M` domains.</p>
           <p><strong>Verbose candidate</strong></p>
           <p>Placeholder candidate preserving most content with longer phrasing.</p>
           <p><strong>Concise candidate</strong></p>
@@ -346,19 +365,37 @@ alpha(t) = alpha_0 * exp(-k * t)</code></pre>
           <li>Failure modes are unstable across runs: earlier punctuation and "kh/k" collapse shifted to function-word and punctuation-heavy drift (for example "the/of/in/\"//episode"), still with low semantic fidelity.</li>
           <li>Current sweep filtering is too permissive (for example 12,800 kept vs 45 skipped at step 1,200), suggesting weak preference discrimination and noisy pair acceptance.</li>
           <li>BERTScore-style signals do not fully capture factual accuracy, grammaticality, or readability when outputs become noisy.</li>
-          <li>Simple Wikipedia is cleaner and more adult-like than real caregiver-child interaction.</li>
+          <li>Mixed-domain training data introduces domain shift; behavior on conversational-style sources may differ from encyclopedia-like passages.</li>
           <li>The current setup does not model turn-taking, grounding, or developmental progression over time.</li>
         </ul>
       </article>
       <article>
         <h2>Iteration and Next Steps</h2>
         <ul class="bullet-list">
+          <li>Iteration record: early attempts showed punctuation-token collapse; later runs shifted to lexical/function-word drift, which motivated tighter diagnostics and sweep retuning.</li>
           <li>Early phase complete: establish the speaker-listener preference pipeline and complete a full epoch run.</li>
           <li>Immediate next step: retune pair filtering (`score_gap_min`, similarity threshold, resampling) so keep/skip behavior is meaningfully selective instead of near-all-keep.</li>
-          <li>Run a targeted sweep over decoding and regularization (`temperature`, `top_p`, KL/length pressure) to reduce function-word drift and punctuation-heavy outputs.</li>
+          <li>Run a targeted sweep over decoding and regularization (`temperature`, `top_p`, Kullback-Leibler (KL) penalty, and length pressure) to reduce function-word drift and punctuation-heavy outputs.</li>
           <li>Add explicit diagnostics per run: keep/skip ratio trajectory, top-token entropy/collapse indicators, and fixed-prompt readability checks.</li>
           <li>Next reporting step: replace placeholders with final plots, ablations, and side-by-side examples from best sweep settings.</li>
           <li>Longer-term extension: test richer datasets and more behaviorally grounded evaluation.</li>
+        </ul>
+      </article>
+    </section>
+
+    <section id="implications" class="panel grid2">
+      <article>
+        <h2>Implications</h2>
+        <ul class="bullet-list">
+          <li>If sweep results hold, this provides a practical recipe for concise, meaning-preserving generation under constrained-data settings.</li>
+          <li>The work can inform model tuning strategies where brevity and semantic fidelity must be jointly optimized.</li>
+        </ul>
+      </article>
+      <article>
+        <h2>Deployment Considerations</h2>
+        <ul class="bullet-list">
+          <li>Do not deploy current checkpoints for user-facing summarization until collapse diagnostics and held-out surprisal comparisons stabilize.</li>
+          <li>Production candidates should include guardrails for malformed output, plus monitoring of token-collapse indicators over time.</li>
         </ul>
       </article>
     </section>
@@ -369,14 +406,12 @@ alpha(t) = alpha_0 * exp(-k * t)</code></pre>
         <ul class="bullet-list">
           <li><a href="https://github.com/banffjiang/DSC-Capstone-A10-2" target="_blank" rel="noreferrer">Project repository</a></li>
           <li><a href="https://github.com/banffjiang/DSC-Capstone-A10-2/blob/website/speaker_listener_rl/training/dpo_with_listener_wandb.py" target="_blank" rel="noreferrer">Training entry point</a></li>
-          <li><a href="https://github.com/banffjiang/DSC-Capstone-A10-2/blob/website/speaker_listener_rl/scripts/run_speaker_wiki.py" target="_blank" rel="noreferrer">Speaker generation script</a></li>
-          <li><a href="https://github.com/banffjiang/DSC-Capstone-A10-2/blob/website/speaker_listener_rl/yaml/dpo_job.yaml" target="_blank" rel="noreferrer">Job configuration</a></li>
+          <li><a href="https://github.com/banffjiang/DSC-Capstone-A10-2/blob/website/speaker_listener_rl/yaml/dpo_job.yaml" target="_blank" rel="noreferrer">DPO full-job configuration (file: dpo_job.yaml)</a></li>
         </ul>
       </article>
       <article>
         <h2>Run Path</h2>
         <pre><code>pip install -r requirements.txt
-python speaker_listener_rl/scripts/run_speaker_wiki.py
 python speaker_listener_rl/training/dpo_with_listener_wandb.py</code></pre>
         <p class="caption">
           These commands show the intended workflow. Final deployment artifacts and experiment outputs will be linked here after the evaluation sweep completes.
@@ -399,6 +434,10 @@ python speaker_listener_rl/training/dpo_with_listener_wandb.py</code></pre>
         <li>BabyLM Challenge (shared task datasets and constraints): <a href="https://osf.io/ryjfm/" target="_blank" rel="noreferrer">https://osf.io/ryjfm/</a>.</li>
         <li>Rafailov et al. (2023). Direct Preference Optimization.</li>
         <li>Zhang et al. (2020). BERTScore: Evaluating text generation with contextual embeddings.</li>
+        <li>Radford et al. (2019). Language Models are Unsupervised Multitask Learners (GPT-2).</li>
+        <li>Liu et al. (2019). RoBERTa: A Robustly Optimized BERT Pretraining Approach.</li>
+        <li>Wolf et al. (2020). Transformers: State-of-the-Art Natural Language Processing (Hugging Face).</li>
+        <li>Biewald (2020). Weights & Biases experiment tracking.</li>
         <li>Padovani et al. (2025). Reinforcement-learning approaches in BabyLM submissions.</li>
         <li>Stopler et al. (2025). Text-game style RL framing for language learning.</li>
         <li>Lazaridou et al. (2016). Multi-agent communication and reference games.</li>
