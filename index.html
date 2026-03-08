@@ -62,12 +62,6 @@
             about language emergence in neural models.
           </p>
         </article>
-        <article class="hero-card">
-          <p class="hero-card__label">Target Reviewer</p>
-          <p>
-            This site is written for technical readers evaluating model design, dataset rigor, and whether the results would justify the child-language claim.
-          </p>
-        </article>
       </div>
     </div>
     <div class="hero__glow" aria-hidden="true"></div>
@@ -86,7 +80,7 @@
       </article>
       <article class="metric">
         <span class="metric__label">Status</span>
-        <strong>Preliminary run complete; sweep tuning in progress</strong>
+        <strong>Proof-of-concept pipeline implemented, results pending full hyperparameter evaluation </strong>
       </article>
     </section>
 
@@ -94,27 +88,23 @@
       <article>
         <h2>Introduction</h2>
         <p>
-          Modern language models usually require much more data than human learners. BabyLM asks whether useful language behavior can be learned under strict token budgets,
-          but it does not by itself explain why early child speech is often short and content-heavy. This matters for readers interested in data-efficient AI systems that communicate clearly under constraints.
+          Modern language models typically require orders of magnitude more data than human learners, and they do not naturally pass through the developmental stages observed in children. BabyLM asks whether useful language behavior 
+          can emerge under strict token budgets, but does not explain why early child speech is short, content-heavy, and systematically focused on nouns and verbs over function words. TeleSpeak treats this as a structured learning 
+          problem and tests it with a three-stage pipeline built on GPT-2.
         </p>
         <p>
-          TeleSpeak treats this as an optimization question and tests it with a GPT-2 speaker, a RoBERTa-based listener, and DPO training with a decaying brevity term: if speaking is expensive, do short utterances emerge while meaning is preserved?
+          GPT-2 is first pretrained on the BabyLM 100M token corpus to establish general language competence — a technical prerequisite with no direct child acquisition analog. It is then fine-tuned on Simple Wikipedia passages 
+          using TF-IDF keyword extracts as training targets. Because TF-IDF penalizes high-frequency function words, the resulting targets consist almost entirely of content words, directly operationalizing the telegraphic speech 
+          stage where children produce utterances like "want cookie" rather than "I want a cookie." Finally, Direct Preference Optimization with a speaker-listener framework refines the model's outputs: a RoBERTa-large listener 
+          scores candidate summaries by semantic similarity to the source, while a decaying length term maintains brevity pressure early in training. We evaluate the pipeline using Age of Acquisition scores across all three checkpoints, 
+          comparing the model's word-learning order against developmental norms from child language research.
         </p>
       </article>
       <article>
         <h2>Target User and Stakeholder</h2>
         <p>
-          Modern language models typically require orders of magnitude more data than human learners, and they do not naturally pass through the developmental stages observed in children. BabyLM asks whether useful language behavior
-          can emerge under strict token budgets, but does not explain why early child speech is short, content-heavy, and systematically focused on nouns and verbs over function words. TeleSpeak treats this as a structured learning
-          problem and tests it with a three-stage pipeline built on GPT-2.
-        </p>
-        <p>
-          GPT-2 is first pretrained on the BabyLM 100M token corpus to establish general language competence - a technical prerequisite with no direct child acquisition analog. It is then fine-tuned on Simple Wikipedia passages
-          using TF-IDF keyword extracts as training targets. Because TF-IDF penalizes high-frequency function words, the resulting targets consist almost entirely of content words, directly operationalizing the telegraphic speech
-          stage where children produce utterances like "want cookie" rather than "I want a cookie." Finally, Direct Preference Optimization with a speaker-listener framework refines the model's outputs: a RoBERTa-large listener
-          scores candidate summaries by semantic similarity to the source, while a decaying length term maintains brevity pressure early in training. We evaluate the pipeline using Age of Acquisition scores across all three checkpoints,
-          comparing the model's word-learning order against developmental norms from child language research.
-        </p>
+          The immediate audience is researchers and mentors interested in cognitively motivated language modeling, efficient learning, and reinforcement-learning-based sequence training.
+          The broader stakeholder is anyone evaluating whether developmental language phenomena can be reproduced with transparent training objectives instead of hand-built rules.
       </article>
     </section>
 
