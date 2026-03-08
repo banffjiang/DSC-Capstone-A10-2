@@ -27,6 +27,7 @@
 
   <header class="hero" id="top">
     <div class="hero__inner">
+      <img class="hero__baby" src="baby-hero.svg" alt="Cartoon baby illustration" />
       <p class="eyebrow">DSC Capstone · RL + Linguistics</p>
       <h1>TeleSpeak</h1>
       <p class="subtitle">Modeling Early Language Acquisition with Reinforcement Learning for Large Language Models</p>
@@ -83,13 +84,13 @@
 
     <section id="problem" class="panel grid2">
       <article>
-        <h2>Problem Statement</h2>
+        <h2>Introduction</h2>
         <p>
           Modern language models usually require much more data than human learners. BabyLM asks whether useful language behavior can be learned under strict token budgets,
-          but it does not by itself explain why early child speech is often short, content-heavy, and structurally incomplete.
+          but it does not by itself explain why early child speech is often short and content-heavy. This matters for readers interested in data-efficient AI systems that communicate clearly under constraints.
         </p>
         <p>
-          TeleSpeak treats this as an optimization question: if speaking is expensive, do short utterances emerge because they preserve enough meaning at lower production cost?
+          TeleSpeak treats this as an optimization question and tests it with a GPT-2 speaker, a RoBERTa-based listener, and DPO training with a decaying brevity term: if speaking is expensive, do short utterances emerge while meaning is preserved?
         </p>
       </article>
       <article>
@@ -119,7 +120,7 @@
     </section>
 
     <section id="approach" class="panel">
-      <h2>Approach Summary</h2>
+      <h2>Methods</h2>
       <p class="section-intro">
         The system pairs a generator with a learned evaluator. The generator proposes multiple candidate summaries for the same passage.
         The listener scores which candidate better preserves meaning, and DPO pushes the speaker toward the preferred candidate while a separate term rewards brevity early in training.
@@ -338,9 +339,10 @@ alpha(t) = alpha_0 * exp(-k * t)</code></pre>
       <article>
         <h2>Limitations and Failure Modes</h2>
         <ul class="bullet-list">
-          <li>Shorter outputs may arise from generic truncation instead of genuinely child-like content selection.</li>
-          <li>Token-collapse behavior persists across runs (earlier punctuation loops, current probe-specific lexical collapse), indicating decoding/training instability.</li>
-          <li>BERTScore-style signals do not fully capture pragmatic success or grammaticality.</li>
+          <li>Shorter outputs may still come from generic compression instead of robust child-like content selection.</li>
+          <li>Failure modes are unstable across runs: earlier punctuation and "kh/k" collapse shifted to function-word and punctuation-heavy drift (for example "the/of/in/\"//episode"), still with low semantic fidelity.</li>
+          <li>Current sweep filtering is too permissive (for example 12,800 kept vs 45 skipped at step 1,200), suggesting weak preference discrimination and noisy pair acceptance.</li>
+          <li>BERTScore-style signals do not fully capture factual accuracy, grammaticality, or readability when outputs become noisy.</li>
           <li>Simple Wikipedia is cleaner and more adult-like than real caregiver-child interaction.</li>
           <li>The current setup does not model turn-taking, grounding, or developmental progression over time.</li>
         </ul>
@@ -348,9 +350,11 @@ alpha(t) = alpha_0 * exp(-k * t)</code></pre>
       <article>
         <h2>Iteration and Next Steps</h2>
         <ul class="bullet-list">
-          <li>Early phase: establish the speaker-listener preference pipeline and stable DPO training.</li>
-          <li>Current phase: run sweeps over decay strength, preference filtering, and decoding settings.</li>
-          <li>Next phase: replace placeholders with final plots, ablations, and qualitative examples.</li>
+          <li>Early phase complete: establish the speaker-listener preference pipeline and complete a full epoch run.</li>
+          <li>Immediate next step: retune pair filtering (`score_gap_min`, similarity threshold, resampling) so keep/skip behavior is meaningfully selective instead of near-all-keep.</li>
+          <li>Run a targeted sweep over decoding and regularization (`temperature`, `top_p`, KL/length pressure) to reduce function-word drift and punctuation-heavy outputs.</li>
+          <li>Add explicit diagnostics per run: keep/skip ratio trajectory, top-token entropy/collapse indicators, and fixed-prompt readability checks.</li>
+          <li>Next reporting step: replace placeholders with final plots, ablations, and side-by-side examples from best sweep settings.</li>
           <li>Longer-term extension: test richer datasets and more behaviorally grounded evaluation.</li>
         </ul>
       </article>
@@ -378,10 +382,11 @@ python speaker_listener_rl/training/dpo_with_listener_wandb.py</code></pre>
     </section>
 
     <section id="conclusion" class="panel">
-      <h2>Takeaway</h2>
+      <h2>Conclusion</h2>
       <p>
         Tentative conclusion: the objective is trainable and can produce occasional compressed keyword-style outputs, but this run does not yet show stable telegraphic quality.
         The next decision point is sweep analysis: we need better tradeoffs between brevity and semantic stability before making a stronger acquisition-style claim.
+        If that tradeoff improves, the impact would be a practical recipe for concise, meaning-preserving generation under low-resource constraints.
       </p>
     </section>
 

@@ -103,6 +103,17 @@ h2 {
   opacity: 0.25;
 }
 
+.hero__baby {
+  position: absolute;
+  top: 0.9rem;
+  right: 1.1rem;
+  width: clamp(90px, 16vw, 180px);
+  height: auto;
+  z-index: 2;
+  filter: drop-shadow(0 8px 20px rgba(21, 34, 56, 0.18));
+  pointer-events: none;
+}
+
 .eyebrow {
   margin: 0 0 0.5rem;
   color: var(--muted);
@@ -418,6 +429,12 @@ footer {
 
   .hero__inner {
     padding-top: 3.2rem;
+  }
+
+  .hero__baby {
+    width: 86px;
+    top: 0.55rem;
+    right: 0.7rem;
   }
 
   .data-table {
