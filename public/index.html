@@ -77,7 +77,7 @@
       </article>
       <article class="metric">
         <span class="metric__label">Status</span>
-        <strong>Pipeline built; final experiments pending</strong>
+        <strong>Preliminary run complete; sweep tuning in progress</strong>
       </article>
     </section>
 
@@ -188,13 +188,13 @@ alpha(t) = alpha_0 * exp(-k * t)</code></pre>
       <article>
         <h2>Evaluation Plan</h2>
         <p>
-          Final evaluation is not complete yet. The intended benchmark is whether the system can shorten outputs without collapsing semantic fidelity.
+          Preliminary evaluation from the current run indicates stable optimization throughput, but generation quality is still mixed. The intended benchmark remains whether outputs can be shortened without semantic collapse.
         </p>
         <ul class="bullet-list">
           <li>Primary metrics: output length, semantic score, and pairwise preference accuracy.</li>
           <li>Baselines: reference GPT-2 behavior without length pressure and ablations removing listener or decay schedule.</li>
           <li>Interpretation rule: shorter is only meaningful if semantic retention stays competitive.</li>
-          <li>Current status: placeholders are shown below until the final sweep is run.</li>
+          <li>Current status: first epoch run finished (kept 8,726 pairs; skipped 18,274); sweep comparisons pending.</li>
         </ul>
       </article>
     </section>
@@ -204,28 +204,28 @@ alpha(t) = alpha_0 * exp(-k * t)</code></pre>
         <div>
           <h2>Results</h2>
           <p class="section-intro">
-            Final quantitative claims are pending. This section is intentionally structured the way the completed evaluation will appear so reviewers can see exactly what evidence will be surfaced.
+            We now have first-run evidence from March 7, 2026. These are tentative conclusions from one completed epoch and will be finalized after sweep comparisons.
           </p>
         </div>
-        <span class="status-pill">Placeholder until final experiments</span>
+        <span class="status-pill">Preliminary run available</span>
       </div>
       <div class="results-grid">
         <article class="insight-card">
           <h3>Finding 1: Brevity vs Fidelity</h3>
           <p>
-            Placeholder: report whether the decaying length penalty produces shorter summaries early in training without permanently degrading semantic retention.
+            The run shows partial brevity gains, but fidelity is inconsistent. Some generations keep key entities, while others drift into malformed or off-topic fragments.
           </p>
         </article>
         <article class="insight-card">
           <h3>Finding 2: Listener Value</h3>
           <p>
-            Placeholder: compare DPO with and without listener-derived preferences to show whether semantic ranking improves beyond naive length minimization.
+            Listener-based filtering is active and selective: 8,726 pairs kept vs 18,274 skipped in epoch 1 (about 32.3% kept), indicating many candidate pairs are rejected as low-value or too similar.
           </p>
         </article>
         <article class="insight-card">
           <h3>Finding 3: Emergent Telegraphic Style</h3>
           <p>
-            Placeholder: inspect whether outputs become more content-word heavy and compressed in a way that resembles telegraphic speech rather than generic truncation.
+            Telegraphic compression appears intermittently, but collapse remains: earlier runs over-produced punctuation (for example "." at roughly 0.7-0.8 probability), while this run shows strong "kh/k" token dominance on one probe. The failure mode shifted rather than disappearing.
           </p>
         </article>
       </div>
@@ -339,6 +339,7 @@ alpha(t) = alpha_0 * exp(-k * t)</code></pre>
         <h2>Limitations and Failure Modes</h2>
         <ul class="bullet-list">
           <li>Shorter outputs may arise from generic truncation instead of genuinely child-like content selection.</li>
+          <li>Token-collapse behavior persists across runs (earlier punctuation loops, current probe-specific lexical collapse), indicating decoding/training instability.</li>
           <li>BERTScore-style signals do not fully capture pragmatic success or grammaticality.</li>
           <li>Simple Wikipedia is cleaner and more adult-like than real caregiver-child interaction.</li>
           <li>The current setup does not model turn-taking, grounding, or developmental progression over time.</li>
@@ -379,8 +380,8 @@ python speaker_listener_rl/training/dpo_with_listener_wandb.py</code></pre>
     <section id="conclusion" class="panel">
       <h2>Takeaway</h2>
       <p>
-        TeleSpeak is a focused testbed for asking whether telegraphic-style language can emerge from a simple tradeoff between semantic success and production cost.
-        The final judgment will depend on whether the model gets shorter <em>without</em> becoming empty, repetitive, or semantically weak.
+        Tentative conclusion: the objective is trainable and can produce occasional compressed keyword-style outputs, but this run does not yet show stable telegraphic quality.
+        The next decision point is sweep analysis: we need better tradeoffs between brevity and semantic stability before making a stronger acquisition-style claim.
       </p>
     </section>
 
