@@ -145,7 +145,7 @@ def pre_training(
     lr_scheduler = get_cosine_schedule_with_warmup(optimizer, num_warmup_steps=warmup_steps, num_training_steps=total_steps)
 
     step = 0
-    for epoch in range(100): #will break when steps are reached
+    for epoch in range(100): #will break when steps are reached, won't run 100 epochs ever
         for batch in dl:
             step += 1
             batch = batch = move_batch_to_model(batch, model)

@@ -442,6 +442,7 @@ def train_dpo(
                     "data_total": len(examples),
                     "data_train": len(train_examples),
                     "data_test": len(test_examples),
+                    "global_step": 0,
                 }
             )
             if wandb.run is not None:
@@ -629,7 +630,6 @@ def train_dpo(
                                 "train/loss_sma": train_loss_sma,
                                 "train/loss_ema": train_loss_ema,
                                 "epoch": e,
-                                "global_step": micro_step,
                                 "optimizer_steps_total": optimizer_step,
                                 "dpo_optimizer_step": dpo_optimizer_step,
                                 "alpha_t": float(alpha_t),

@@ -79,7 +79,7 @@ spec:
           valueFrom:
             secretKeyRef:
               name: wandb-api-key
-              key: WANDB_API_KEY
+              key: key
         - name: WANDB_PROJECT
           value: "dpo-training"
         - name: WANDB_MODE

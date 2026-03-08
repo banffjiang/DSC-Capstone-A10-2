@@ -3,7 +3,7 @@
 * Also you need to run the following command with your wandb key:
 ```
 kubectl create secret generic wandb-api-key \
-  --from-literal=WANDB_API_KEY=<your_actual_key_here> \
+  --from-literal=key=<your_actual_key_here> \
   -n <namespace>
 ```
 

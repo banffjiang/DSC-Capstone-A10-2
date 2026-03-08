@@ -50,6 +50,8 @@ command:
   - "2"
   - --wandb_project
   - dpo-training
+  - --data_limit
+  - "5000"
 
 parameters:
   lr:

@@ -55,23 +55,24 @@ spec:
               --epochs 3 \
               --batch_size 4 \
               --grad_accum 4 \
-              --lr 2e-6 \
+              --lr 1e-6 \
               --max_length 256 \
               --nll_warmup_steps 0 \
               --nll_steps_per_cycle 1 \
               --dpo_steps_per_cycle 2 \
               --nll_batch_size 4 \
-              --score_gap_min 0.03 \
+              --score_gap_min 0.04 \
               --candidate_b_temp 1.1 \
-              --max_pair_similarity 0.8 \
-              --max_resample_tries 2 \
+              --data_limit 40000 \
+              --max_pair_similarity 0.75 \
+              --max_resample_tries 4 \
               --max_new_tokens 48 \
               --temperature 0.7 \
               --top_p 0.9 \
               --repetition_penalty 1.1 \
               --no_repeat_ngram_size 2 \
               --wandb_project dpo-training \
-              --wandb_run_name dpo-stage2-run1 \
+              --wandb_run_name dpo-stage2-run2 \
               --alpha_k 8 \
               --alpha 0.1 \
               --beta 0.05
@@ -84,7 +85,7 @@ spec:
           valueFrom:
             secretKeyRef:
               name: wandb-api-key
-              key: WANDB_API_KEY
+              key: key
         - name: WANDB_PROJECT
           value: "dpo-training"
         - name: WANDB_MODE

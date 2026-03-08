@@ -30,7 +30,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: wandb-api-key
-                  key: WANDB_API_KEY
+                  key: key
             - name: WANDB_PROJECT
               value: dpo-training
             - name: WORLD_SIZE
@@ -58,7 +58,7 @@ spec:
               python -m pip install -r requirements.txt 
               python -c "import torch, transformers; print(torch.__version__, transformers.__version__)"
               nvidia-smi
-              python -m wandb agent lemn-lab/dpo-training/joljvv2j 
+              python -m wandb agent lemn-lab/dpo-training/71osy98i
           #replace the part after wandb agent with whatever your sweep job is named ^
           resources:
             requests:
