@@ -369,7 +369,7 @@ alpha(t) = alpha_0 * exp(-k * t)
         <h2>Limitations and Failure Modes</h2>
         <ul class="bullet-list">
           <li>Shorter outputs may still come from generic compression instead of robust child-like content selection.</li>
-          <li>Failure modes are unstable across runs: earlier punctuation and "kh/k" collapse shifted to function-word and punctuation-heavy drift (for example "the/of/in/\"//episode"), still with low semantic fidelity.</li>
+          <li>Failure modes are unstable across runs: earlier punctuation and "kh/k" collapse shifted to function-word and punctuation-heavy drift (for example "the/of/in"), still with low semantic fidelity.</li>
           <li>Current sweep filtering is too permissive (for example 12,800 kept vs 45 skipped at step 1,200), suggesting weak preference discrimination and noisy pair acceptance.</li>
           <li>BERTScore-style signals do not fully capture factual accuracy, grammaticality, or readability when outputs become noisy.</li>
           <li>Mixed-domain training data introduces domain shift; behavior on conversational-style sources may differ from encyclopedia-like passages.</li>
@@ -432,6 +432,16 @@ python speaker_listener_rl/training/dpo_with_listener_wandb.py</code></pre>
         Tentative conclusion: the objective is trainable and can produce occasional compressed keyword-style outputs, but this run does not yet show stable telegraphic quality.
         The next decision point is sweep analysis: we need better tradeoffs between brevity and semantic stability before making a stronger acquisition-style claim.
         If that tradeoff improves, the impact would be a practical recipe for concise, meaning-preserving generation under low-resource constraints.
+      </p>
+    </section>
+
+    <section id="acknowledgements" class=""panel>
+      <h2>Acknowledgements</h2>
+      <p>
+        We thank our mentor Dr. Alex Warstadt for his guidance and feedback throughout this project.
+      </p>
+      <p>
+        This work used computing resources available through the National Research Platform (NRP) at the University of California, San Diego.
       </p>
     </section>
 
