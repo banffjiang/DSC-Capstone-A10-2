@@ -27,6 +27,7 @@ def make_prompt(source_text):
 
 @torch.inference_mode()
 def generate_summary(model, tokenizer, prompt, top_p, temperature, max_new_tokens, repetition_penalty, no_repeat_ngram_size, seed):
+    #helper to generate a sample for the speaker model
     gen = torch.Generator(device=model.device)
     gen.manual_seed(seed)
 
@@ -53,6 +54,7 @@ def generate_summary(model, tokenizer, prompt, top_p, temperature, max_new_token
     return decoded.strip()
 
 def set_global_seed(seed):
+    #sets random seed for replicability
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)

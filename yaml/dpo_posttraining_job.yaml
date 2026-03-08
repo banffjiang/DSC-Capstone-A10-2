@@ -48,23 +48,23 @@ spec:
             
             wandb login $WANDB_API_KEY
 
-            python -m training.dpo_full_train_stage2 \
+            python -m training.dpo_posttraining \
               --init_ckpt /workspace/checkpoints/stage2/checkpoint-1000 \
               --input_path data/simple_wiki_passages.jsonl \
               --output_path /workspace/checkpoints/dpo_training \
               --epochs 3 \
               --batch_size 4 \
               --grad_accum 4 \
-              --lr 1e-6 \
+              --lr 2e-6 \
               --max_length 256 \
               --nll_warmup_steps 0 \
               --nll_steps_per_cycle 1 \
               --dpo_steps_per_cycle 2 \
               --nll_batch_size 4 \
-              --score_gap_min 0.05 \
+              --score_gap_min 0.03 \
               --candidate_b_temp 1.1 \
-              --max_pair_similarity 0.75 \
-              --max_resample_tries 6 \
+              --max_pair_similarity 0.8 \
+              --max_resample_tries 2 \
               --max_new_tokens 48 \
               --temperature 0.7 \
               --top_p 0.9 \
@@ -81,7 +81,10 @@ spec:
         
         env:
         - name: WANDB_API_KEY
-          value: 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
+          valueFrom:
+            secretKeyRef:
+              name: wandb-api-key
+              key: WANDB_API_KEY
         - name: WANDB_PROJECT
           value: "dpo-training"
         - name: WANDB_MODE

@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: dpo-debug-smoke
+  name: dpo-training-random
   namespace: dsc-capstone-25-26
 spec:
   backoffLimit: 0
@@ -16,8 +16,6 @@ spec:
                 operator: In
                 values:
                 - NVIDIA-A10
-                - NVIDIA-A40
-                - NVIDIA-GeForce-RTX-3090
 
       initContainers:
       - name: init-permissions
@@ -28,7 +26,7 @@ spec:
           name: storage-volume
 
       containers:
-      - name: dpo-debug
+      - name: dpo-trainer
         image: pytorch/pytorch:2.1.0-cuda11.8-cudnn8-runtime
         workingDir: /workspace
         command: ["/bin/bash", "-c"]
@@ -36,70 +34,75 @@ spec:
           - |
             set -e
             apt-get update && apt-get install -y git
-
-            rm -rf /workspace/repo
+            
+            # Clean up if old repo exists and clone the repository
+            rm -rf /workspace/repo  
             git clone https://github.com/banffjiang/DSC-Capstone-A10-2.git /workspace/repo
             cd /workspace/repo
-
-            export PYTHONPATH=/workspace/repo
+            
             pip install --no-cache-dir -r requirements.txt
-
-            # --- DPO smoke test ---
-            # Uses pretrained gpt2 (no init_ckpt), small dataset, and forces DPO every optimizer step.
-            # Disables NLL mixing and KL to isolate "does DPO pipeline run and step?"
-            python -m training.dpo_full_train_logged \
+            
+            wandb login $WANDB_API_KEY
+            
+            python training/dpo_with_listener_wandb.py \
+              --wandb_project dpo-training \
+              --wandb_run_name simplewiki-run-$(date +%Y%m%d-%H%M) \
               --policy_model gpt2 \
-              --input_path data/simple_wiki_passages_8k.jsonl \
-              --output_path /workspace/checkpoints/dpo_debug_kl \
+              --reference_model gpt2 \
+              --input_path data/simple_wiki_passages.jsonl \
+              --output_path /workspace/checkpoints \
+              --random_init_policy \
               --epochs 5 \
               --batch_size 16 \
               --grad_accum 8 \
-              --lr 5e-7 \
-              --max_length 256 \
-              --nll_warmup_steps 0 \
-              --nll_steps_per_cycle 2 \
-              --dpo_steps_per_cycle 1 \
-              --score_gap_min 0.01 \
-              --max_pair_similarity 0.99 \
-              --max_resample_tries 2 \
+              --lr 5e-6 \
+              --alpha 0.1 \
+              --beta 0.05 \
+              --max_length 128 \
               --max_new_tokens 16 \
-              --temperature 0.7 \
-              --top_p 0.9 \
-              --repetition_penalty 1.1 \
-              --kl_weight 0.00 \
-              --wandb_project dpo-training \
-              --wandb_run_name dpo-debug
-
-            echo "DPO debug outputs:"
-            ls -lah /workspace/checkpoints/dpo_debug_smoke || true
-
+              --top_p 0.8 \
+              --temperature 0.5 \
+              --repetition_penalty 1.0 \
+              --no_repeat_ngram_size 0 \
+              --score_gap_min 0.01 \
+              --max_pair_similarity 0.9 \
+              --max_resample_tries 4 \
+              --listener_model_type roberta-large \
+              --listener_batch_size 8 \
+              --run_validation \
+              --validation_max_examples 32
+            
+            echo "checkpoints saved to /workspace/checkpoints"
+            ls -lh /workspace/checkpoints/
+        
         env:
-        - name: PYTHONPATH
-          value: /workspace/repo
         - name: WANDB_API_KEY
-          value: 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
+          valueFrom:
+            secretKeyRef:
+              name: wandb-api-key
+              key: WANDB_API_KEY
         - name: WANDB_PROJECT
           value: "dpo-training"
         - name: WANDB_MODE
           value: "online"
-        - name: HF_HOME
-          value: /workspace/.cache/huggingface
-        - name: HF_DATASETS_CACHE
-          value: /workspace/.cache/huggingface/datasets
-        - name: TRANSFORMERS_CACHE
-          value: /workspace/.cache/huggingface/transformers
+        - name: WORLD_SIZE
+          value: "1"
+        - name: RANK
+          value: "0"
+        - name: LOCAL_RANK
+          value: "0"
+        # - name: CUDA_LAUNCH_BLOCKING
+        #   value: "1"
         - name: TORCH_SHOW_CPP_STACKTRACES
           value: "1"
-        - name: PIP_CACHE_DIR
-          value: /workspace/.cache/pip
-
+        
         volumeMounts:
         - mountPath: /workspace
           name: storage-volume
-
+        
         resources:
           requests:
-            memory: "16Gi"
+            memory: "32Gi"
             cpu: "8"
             nvidia.com/gpu: "1"
           limits:
@@ -120,4 +123,4 @@ spec:
       volumes:
       - name: storage-volume
         persistentVolumeClaim:
-          claimName: colin-dpo-pvc
+          claimName: dpo-storage

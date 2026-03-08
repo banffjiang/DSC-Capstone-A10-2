@@ -1,79 +1,76 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: dpo-sweep-agent
+  name: wandb-agent
 spec:
   backoffLimit: 0
   template:
     spec:
+      restartPolicy: Never
       affinity:
         nodeAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             nodeSelectorTerms:
-            - matchExpressions:
-              - key: nvidia.com/gpu.product
-                operator: In
-                values:
-                - NVIDIA-A10
-      restartPolicy: Never
+              - matchExpressions:
+                  - key: nvidia.com/gpu.product
+                    operator: In
+                    values: ["NVIDIA-A10"]
       containers:
-      - name: sweep-agent
-        image: pytorch/pytorch:2.1.0-cuda11.8-cudnn8-runtime
-        workingDir: /workspace/repo
-
-        command: ["bash", "-lc"] #pip install --no-cache-dir -r requirements.txt
-        args:
-          - |
-            set -e
-            apt-get update && apt-get install -y git
-            
-            if [ ! -d /workspace/repo/.git ]; then
+        - name: sweep-agent
+          image: pytorch/pytorch:2.1.0-cuda11.8-cudnn8-runtime
+          workingDir: /workspace
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+          env:
+            - name: WANDB_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: wandb-api-key
+                  key: WANDB_API_KEY
+            - name: WANDB_PROJECT
+              value: dpo-training
+            - name: WORLD_SIZE
+              value: "1"
+            - name: RANK
+              value: "0"
+            - name: LOCAL_RANK
+              value: "0"
+            - name: MASTER_ADDR
+              value: "127.0.0.1"
+            - name: MASTER_PORT
+              value: "29500"
+          command: ["/bin/bash","-lc"]
+          args:
+            - |
+              set -euo pipefail
+              apt-get update && apt-get install -y git
+              rm -rf /workspace/repo  
               git clone https://github.com/banffjiang/DSC-Capstone-A10-2.git /workspace/repo
-            else
-              cd /workspace/repo && git pull
-            fi
-            cd /workspace/repo
+              cd /workspace/repo
 
-            pip install -U wandb
-            pip uninstall -y torchvision torchaudio torch || true
-            pip install -U --force-reinstall torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-            pip install -U -r requirements.txt --no-deps
-            pip install -U transformers accelerate trl bert-score datasets sentencepiece protobuf filelock huggingface-hub tqdm numpy
-
-            python -m wandb agent lemn-lab/dpo-training/l5n97h21
-
-        env:
-        - name: WANDB_API_KEY
-          value: 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
-        - name: WANDB_PROJECT
-          value: dpo-training
-        - name: WORLD_SIZE
-          value: "1"
-        - name: RANK
-          value: "0"
-        - name: LOCAL_RANK
-          value: "0"
-        - name: MASTER_ADDR
-          value: "127.0.0.1"
-        - name: MASTER_PORT
-          value: "29500"
-
-        resources:
-          requests:
-            cpu: "8"
-            memory: "32Gi"
-            nvidia.com/gpu: "1"
-          limits:
-            cpu: "16"
-            memory: "32Gi"
-            nvidia.com/gpu: "1"
-
-        volumeMounts:
-        - name: workspace
-          mountPath: /workspace
+              python -m venv /workspace/.venv
+              source /workspace/.venv/bin/activate
+              python -m pip install -U pip
+              python -m pip install -r requirements.txt 
+              python -c "import torch, transformers; print(torch.__version__, transformers.__version__)"
+              nvidia-smi
+              python -m wandb agent lemn-lab/dpo-training/joljvv2j 
+          #replace the part after wandb agent with whatever your sweep job is named ^
+          resources:
+            requests:
+              cpu: "8"
+              memory: "32Gi"
+              nvidia.com/gpu: "1"
+            limits:
+              cpu: "16"
+              memory: "32Gi"
+              nvidia.com/gpu: "1"
 
       volumes:
-      - name: workspace
-        persistentVolumeClaim:
-          claimName: dpo-sweep-storage   # <-- replace with your PVC
-
+        - name: workspace
+          persistentVolumeClaim:
+            claimName: dpo-sweep-storage

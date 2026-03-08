@@ -76,7 +76,10 @@ spec:
         
         env:
         - name: WANDB_API_KEY
-          value: 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
+          valueFrom:
+            secretKeyRef:
+              name: wandb-api-key
+              key: WANDB_API_KEY
         - name: WANDB_PROJECT
           value: "dpo-training"
         - name: WANDB_MODE

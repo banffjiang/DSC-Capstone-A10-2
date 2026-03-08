@@ -3,7 +3,7 @@ metric:
   name: train/loss-ema #dpo loss, might need to change to reward func
   goal: minimize
 
-program: training.dpo_full_train_stage2
+program: training.dpo_posttraining
 
 command:
   - ${env}
@@ -19,9 +19,9 @@ command:
   - --epochs
   - "1"
   - --batch_size
-  - "4"
+  - "8"
   - --grad_accum
-  - "4"
+  - "2"
   - --max_length
   - "256"
   - --nll_warmup_steps
@@ -37,7 +37,7 @@ command:
   - --max_pair_similarity
   - "0.75"
   - --max_resample_tries
-  - "6"
+  - "2"
   - --max_new_tokens
   - "48"
   - --temperature
