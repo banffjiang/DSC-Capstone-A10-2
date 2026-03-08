@@ -107,8 +107,10 @@ h2 {
   position: absolute;
   top: 0.9rem;
   right: 1.1rem;
-  width: clamp(90px, 16vw, 180px);
+  width: clamp(56px, 8vw, 96px);
+  max-width: 96px;
   height: auto;
+  border-radius: 14px;
   z-index: 2;
   filter: drop-shadow(0 8px 20px rgba(21, 34, 56, 0.18));
   pointer-events: none;
@@ -432,7 +434,8 @@ footer {
   }
 
   .hero__baby {
-    width: 86px;
+    width: 62px;
+    max-width: 62px;
     top: 0.55rem;
     right: 0.7rem;
   }
