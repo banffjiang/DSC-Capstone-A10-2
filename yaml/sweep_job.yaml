@@ -58,7 +58,7 @@ spec:
               python -m pip install -r requirements.txt 
               python -c "import torch, transformers; print(torch.__version__, transformers.__version__)"
               nvidia-smi
-              python -m wandb agent lemn-lab/dpo-training/71osy98i
+              python -m wandb agent lemn-lab/dpo-training/tbj6h3cz
           #replace the part after wandb agent with whatever your sweep job is named ^
           resources:
             requests:
