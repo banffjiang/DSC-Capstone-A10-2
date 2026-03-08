@@ -43,10 +43,13 @@
         <article class="hero-card hero-card--pitch">
           <p class="hero-card__label">One-Screen Pitch</p>
           <p>
-            TeleSpeak tests whether child-like telegraphic speech can emerge from
-            <strong>optimization under production constraints</strong> rather than from a hard-coded language bottleneck.
-            We train a speaker with preference learning and a decaying pressure toward shorter utterances, then measure whether concise,
-            meaning-preserving summaries become a stable strategy.
+            TeleSpeak tests whether the telegraphic speech stage of child language acquisition, where children
+            produce content-word utterances like "want cookie" instead of the formal "I want a cookie", can be learned
+            through a structured training pipeline. We pretrain GPT-2 on the BabyLM corpus to establish
+            baseline language competence, supervised fine-tune (SFT) it on TF-IDF keyword summaries to encourage
+            content-word generation, then apply direct preference optimization (DPO) with a speaker-listener framework 
+            and a decaying length objective term to slowly encourage more fluent output. We evaluate whether this pipeline
+            replicated the developmental word-learning trajectory observed in children using Age of Acquisition (AoA) scores.
           </p>
         </article>
         <article class="hero-card">
