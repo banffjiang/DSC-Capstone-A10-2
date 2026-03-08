@@ -7,6 +7,10 @@ This repo trains a speaker model (GPT-style LM) using listener-based preferences
 
 The current workflow is based on the unified `train_100M` data pipeline. Older CHILDES-only and `K=2` docs are no longer the primary path.
 
+## Dataset Source
+
+- BabyLM OSF data directory: https://osf.io/ryjfm/
+
 ## Project Organization
 
 The codebase is organized as Python modules/scripts (not notebook-driven):
