@@ -46,7 +46,7 @@
             TeleSpeak tests whether the telegraphic speech stage of child language acquisition, where children
             produce content-word utterances like "want cookie" instead of the formal "I want a cookie", can be learned
             through a structured training pipeline. We pretrain GPT-2 on the BabyLM corpus to establish
-            baseline language competence, supervised fine-tune (SFT) it on TF-IDF keyword summaries to encourage
+            baseline language competence, supervised fine-tune (SFT) it on term-frequency-inverse-document-frequency (TF-IDF) keyword summaries to encourage
             content-word generation, then apply direct preference optimization (DPO) with a speaker-listener framework 
             and a decaying length objective term to slowly encourage more fluent output. We evaluate whether this pipeline
             replicated the developmental word-learning trajectory observed in children using Age of Acquisition (AoA) scores.
@@ -68,6 +68,109 @@
   </header>
 
   <main>
+    <section id="results" class="panel">
+      <div class="section-heading">
+        <div>
+          <h2>Results</h2>
+          <p class="section-intro">
+            Current quantitative results are from AoA-style surprisal analysis (baseline vs DPO model). Additional sweep-level AoA comparisons are in progress.
+          </p>
+        </div>
+      </div>
+      <div class="results-grid">
+        <article class="insight-card">
+          <h3>Finding 1: ΔSurprisal Shift</h3>
+          <p>
+            Mean Δsurprisal per word is lower for the DPO model (0.271) than baseline (2.067), indicating a different word-learning profile under fine-tuning.
+          </p>
+        </article>
+        <article class="insight-card">
+          <h3>Finding 2: Final Surprisal Tradeoff</h3>
+          <p>
+            Mean final surprisal is higher for the DPO model (11.92) than baseline (8.93), so improvements in trajectory-style metrics must be interpreted with this cost in mind.
+          </p>
+        </article>
+        <article class="insight-card">
+          <h3>Finding 3: Qualitative Stability Still Matters</h3>
+          <p>
+            AoA metrics are informative, but generation quality issues (collapse/noisy outputs in some runs) remain a key limitation for interpreting child-like behavior claims.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section id="aoa-method" class="panel">
+      <h2>AoA Methodology</h2>
+      <p>
+        We operationalize lexical acquisition with surprisal, defined as the negative log probability of a target word in context.
+        Intuitively, words the model has learned receive lower surprisal over training.
+      </p>
+      <pre><code>Surprisal(w) = -log2 P(w | context)</code></pre>
+      <p>
+        Using CDI vocabulary targets, we track surprisal over checkpoints, fit sigmoid-like learning curves, and derive model AoA estimates for comparison with human AoA norms.
+      </p>
+    </section>
+
+    <section id="charts" class="panel">
+      <div class="section-heading">
+        <div>
+          <h2>Charts</h2>
+          <p class="section-intro">
+            AoA visualization for the target word <code>lick</code>: GPT-2 baseline vs DPO model across token-count scale.
+          </p>
+        </div>
+      </div>
+      <div class="chart-grid">
+        <article class="chart-card">
+          <img class="chart-image" src="figures/lick_gpt2.png" alt="AoA curve for word 'lick' using GPT-2 baseline" />
+          <p class="caption">
+            <strong>Figure 2. (GPT-2 baseline):</strong> for the CDI word <code>lick</code>, mean surprisal decreases gradually as log word count increases, showing a steadier learning trajectory.
+            The baseline also shows a broader overall reduction in surprisal (about 11.2 to 10.0).
+          </p>
+        </article>
+        <article class="chart-card">
+          <img class="chart-image" src="figures/lick_dpo.png" alt="AoA curve for word 'lick' using DPO model" />
+          <p class="caption">
+            <strong>Figure 3. (DPO model):</strong> mean surprisal also trends downward, but with sharper local changes rather than the same steady decline.
+            Its overall reduction is narrower (about 11.64 to 11.54), suggesting a different acquisition pattern for this probe word.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section id="evaluation" class="panel">
+      <article>
+        <h2>Evaluation Table (Current Metrics)</h2>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Metric</th>
+              <th>GPT-2 Baseline</th>
+              <th>DPO Model</th>
+              <th>SFT + DPO</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Mean Δsurprisal / word</td>
+              <td>2.067</td>
+              <td>0.271</td>
+              <td>0.723</td>
+            </tr>
+            <tr>
+              <td>Mean final surprisal</td>
+              <td>8.93</td>
+              <td>11.92</td>
+              <td>10.849</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="caption">
+          AoA-oriented metrics from the latest baseline-vs-DPO comparison run.
+        </p>
+      </article>
+    </section>
+
     <section class="panel metrics">
       <article class="metric">
         <span class="metric__label">Core Question</span>
@@ -76,7 +179,7 @@
       </article>
       <article class="metric">
         <span class="metric__label">Setup</span>
-        <strong>GPT-2 speaker + RoBERTa listener + Direct Preference Optimization (DPO)</strong>
+        <strong>GPT-2 speaker + RoBERTa listener + DPO</strong>
       </article>
       <article class="metric">
         <span class="metric__label">Status</span>
@@ -88,16 +191,11 @@
       <article>
         <h2>Introduction</h2>
         <p>
-          Modern language models typically require orders of magnitude more data than human learners, and they do not naturally pass through the developmental stages observed in children. BabyLM asks whether useful language behavior 
-          can emerge under strict token budgets, but does not explain why early child speech is short, content-heavy, and systematically focused on nouns and verbs over function words. TeleSpeak treats this as a structured learning 
-          problem and tests it with a three-stage pipeline built on GPT-2.
-        </p>
-        <p>
-          GPT-2 is first pretrained on the BabyLM 100M token corpus to establish general language competence — a technical prerequisite with no direct child acquisition analog. It is then fine-tuned on Simple Wikipedia passages 
-          using TF-IDF keyword extracts as training targets. Because TF-IDF penalizes high-frequency function words, the resulting targets consist almost entirely of content words, directly operationalizing the telegraphic speech 
-          stage where children produce utterances like "want cookie" rather than "I want a cookie." Finally, Direct Preference Optimization with a speaker-listener framework refines the model's outputs: a RoBERTa-large listener 
-          scores candidate summaries by semantic similarity to the source, while a decaying length term maintains brevity pressure early in training. We evaluate the pipeline using Age of Acquisition scores across all three checkpoints, 
-          comparing the model's word-learning order against developmental norms from child language research.
+          Modern language models do not naturally pass through the developmental stages observed in children. 
+          TeleSpeak treats this as a structured learning problem, testing a three-stage pipeline built on GPT-2: pretraining on the BabyLM 100M corpus, 
+          SFT on TF-IDF keyword extracts to induce content-word selectivity, and DPO with a decaying length term to 
+          refine meaning-preserving compression. We evaluate the pipeline using AoA scores across all three checkpoints, comparing the model's 
+          word-learning order against developmental norms from child language research.
         </p>
       </article>
       <article>
@@ -128,7 +226,7 @@
     <section id="approach" class="panel">
       <h2>Methods</h2>
       <p class="section-intro">
-        Our pipeline has three stages: unsupervised pretraining, supervised fine-tuning (SFT), and preference optimization (DPO).
+        Our pipeline has three stages: unsupervised pretraining, SFT, and DPO.
         The same GPT-2 policy model is carried through all stages, while a RoBERTa-based listener is used in DPO to construct chosen/rejected pairs.
       </p>
       <div class="cards">
@@ -157,7 +255,9 @@
         </article>
         <article class="card">
           <h3>What We Built</h3>
-          <p>Data preprocessing, candidate generation, listener scoring, DPO training code, and experiment tracking are all assembled in this repo as a single end-to-end training workflow.</p>
+          <p>
+            Data preprocessing, candidate generation, listener scoring, DPO training code, TF-IDF keyword directed SFT, and experiment tracking are all assembled in this repo as a single end-to-end training workflow.
+          </p>
         </article>
         <article class="card">
           <h3>What We Reused</h3>
@@ -168,7 +268,7 @@
         <img class="pipeline-image" src="figures/dsc_capstone_diagram.jpg" alt="Diagram showing the pipeline for training the LM." />
       </div>
       <p class="caption">
-        <strong>Figure 1. (Pipeline model):</strong> Diagram illustrating the training pipeline implemented to operationalize telegraphic-speech in language models. Scroll to view full image.
+        <strong>Figure 1. (Pipeline model):</strong> Diagram illustrating the training pipeline implemented to operationalize telegraphic-speech in language models.
     </section>
 
     <section id="sft" class="panel">
@@ -189,7 +289,7 @@ Prompt format:
     <section id="dpo" class="panel">
       <h2>DPO Stage</h2>
       <p>
-        Direct Preference Optimization (DPO) trains on pairs of candidate summaries labeled as chosen/rejected by the listener.
+        DPO trains on pairs of candidate summaries labeled as chosen/rejected by the listener.
         The model is updated to increase probability on chosen outputs and decrease probability on rejected outputs, with an added decaying brevity pressure.
       </p>
       <p>
@@ -244,153 +344,23 @@ alpha(t) = alpha_0 * exp(-k * t)
       </article>
     </section>
 
-    <section id="aoa-method" class="panel">
-      <h2>AoA Methodology</h2>
-      <p>
-        We operationalize lexical acquisition with surprisal, defined as the negative log probability of a target word in context.
-        Intuitively, words the model has learned receive lower surprisal over training.
-      </p>
-      <pre><code>Surprisal(w) = -log2 P(w | context)</code></pre>
-      <p>
-        Using CDI vocabulary targets, we track surprisal over checkpoints, fit sigmoid-like learning curves, and derive model AoA estimates for comparison with human AoA norms.
-      </p>
-    </section>
-
-    <section id="results" class="panel">
-      <div class="section-heading">
-        <div>
-          <h2>Results</h2>
-          <p class="section-intro">
-            Current quantitative results are from AoA-style surprisal analysis (baseline vs DPO model). Additional sweep-level AoA comparisons are in progress.
-          </p>
-        </div>
-      </div>
-      <div class="results-grid">
-        <article class="insight-card">
-          <h3>Finding 1: ΔSurprisal Shift</h3>
-          <p>
-            Mean Δsurprisal per word is lower for the DPO model (0.271) than baseline (2.067), indicating a different word-learning profile under fine-tuning.
-          </p>
-        </article>
-        <article class="insight-card">
-          <h3>Finding 2: Final Surprisal Tradeoff</h3>
-          <p>
-            Mean final surprisal is higher for the DPO model (11.92) than baseline (8.93), so improvements in trajectory-style metrics must be interpreted with this cost in mind.
-          </p>
-        </article>
-        <article class="insight-card">
-          <h3>Finding 3: Qualitative Stability Still Matters</h3>
-          <p>
-            AoA metrics are informative, but generation quality issues (collapse/noisy outputs in some runs) remain a key limitation for interpreting child-like behavior claims.
-          </p>
-        </article>
-      </div>
-    </section>
-
-    <section id="charts" class="panel">
-      <div class="section-heading">
-        <div>
-          <h2>Charts</h2>
-          <p class="section-intro">
-            AoA visualization for the target word <code>lick</code>: GPT-2 baseline vs DPO model across token-count scale.
-          </p>
-        </div>
-      </div>
-      <div class="chart-grid">
-        <article class="chart-card">
-          <img class="chart-image" src="figures/lick_gpt2.png" alt="AoA curve for word 'lick' using GPT-2 baseline" />
-          <p class="caption">
-            <strong>Figure 2. (GPT-2 baseline):</strong> for the CDI word <code>lick</code>, mean surprisal decreases gradually as log word count increases, showing a steadier learning trajectory.
-            The baseline also shows a broader overall reduction in surprisal (about 11.2 to 10.0).
-          </p>
-        </article>
-        <article class="chart-card">
-          <img class="chart-image" src="figures/lick_dpo.png" alt="AoA curve for word 'lick' using DPO model" />
-          <p class="caption">
-            <strong>Figure 3. (DPO model):</strong> mean surprisal also trends downward, but with sharper local changes rather than the same steady decline.
-            Its overall reduction is narrower (about 11.64 to 11.54), suggesting a different acquisition pattern for this probe word.
-          </p>
-        </article>
-      </div>
-    </section>
-
-    <section id="evaluation" class="panel">
-      <article>
-        <h2>Evaluation Table (Current Metrics)</h2>
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Metric</th>
-              <th>GPT-2 Baseline</th>
-              <th>DPO Model</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Mean Δsurprisal / word</td>
-              <td>2.067</td>
-              <td>0.271</td>
-            </tr>
-            <tr>
-              <td>Mean final surprisal</td>
-              <td>8.93</td>
-              <td>11.92</td>
-            </tr>
-          </tbody>
-        </table>
-        <p class="caption">
-          AoA-oriented metrics from the latest baseline-vs-DPO comparison run.
-        </p>
-      </article>
-    </section>
-
-    <section id="examples" class="panel grid2">
-      <article>
-        <h2>Example Output Format</h2>
-        <div class="example-block">
-          <p><strong>Input passage</strong></p>
-          <p>A held-out passage from the mixed `train_100M` domains.</p>
-          <p><strong>Verbose candidate</strong></p>
-          <p>Placeholder candidate preserving most content with longer phrasing.</p>
-          <p><strong>Concise candidate</strong></p>
-          <p>Placeholder candidate using shorter, denser wording.</p>
-        </div>
-      </article>
-      <article>
-        <h2>How to Read the Results</h2>
-        <p>
-          We treat AoA claims as meaningful only when all conditions below hold:
-        </p>
-        <ul class="bullet-list">
-          <li>Model-derived AoA aligns better with human AoA rankings than the baseline.</li>
-          <li>Δsurprisal improvements are not offset by severe degradation in final surprisal or generation quality.</li>
-          <li>The pattern survives ablations removing listener signal or decay scheduling.</li>
-        </ul>
-      </article>
-    </section>
-
     <section id="limitations" class="panel grid2">
       <article>
-        <h2>Limitations and Failure Modes</h2>
+        <h2>Limitations and Failures</h2>
         <ul class="bullet-list">
           <li>Shorter outputs may still come from generic compression instead of robust child-like content selection.</li>
-          <li>Failure modes are unstable across runs: earlier punctuation and "kh/k" collapse shifted to function-word and punctuation-heavy drift (for example "the/of/in"), still with low semantic fidelity.</li>
-          <li>Current sweep filtering is too permissive (for example 12,800 kept vs 45 skipped at step 1,200), suggesting weak preference discrimination and noisy pair acceptance.</li>
-          <li>BERTScore-style signals do not fully capture factual accuracy, grammaticality, or readability when outputs become noisy.</li>
+          <li>All three pipeline stages are undertrained due to compute constraints, and only three checkpoints are available for AoA evaluation, limiting the strength of conclusions.</li>
+          <li>BERTScore preference signal is weak for telegraphic outputs — when both candidates are very short, scores are too close to provide reliable preference discrimination.</li>
+          <li>Failure modes are unstable across runs: earlier token collapse shifted to function-word drift (for example "the/./in"), still with low semantic fidelity.</li>
           <li>Mixed-domain training data introduces domain shift; behavior on conversational-style sources may differ from encyclopedia-like passages.</li>
-          <li>The current setup does not model turn-taking, grounding, or developmental progression over time.</li>
         </ul>
       </article>
       <article>
-        <h2>Iteration and Next Steps</h2>
+        <h2>Next Steps</h2>
         <ul class="bullet-list">
-          <li>Iteration record: early attempts showed punctuation-token collapse; later runs shifted to lexical/function-word drift, which motivated tighter diagnostics and sweep retuning.</li>
-          <li>Early phase complete: establish the speaker-listener preference pipeline and complete a full epoch run.</li>
-          <li>Immediate next step: retune pair filtering (`score_gap_min`, similarity threshold, resampling) so keep/skip behavior is meaningfully selective instead of near-all-keep.</li>
-          <li>Run a targeted sweep over decoding and regularization (`temperature`, `top_p`, Kullback-Leibler (KL) penalty, and length pressure) to reduce function-word drift and punctuation-heavy outputs.</li>
-          <li>Add explicit diagnostics per run: keep/skip ratio trajectory, top-token entropy/collapse indicators, and fixed-prompt readability checks.</li>
-          <li>Next reporting step: replace placeholders with final plots, ablations, and side-by-side examples from best sweep settings.</li>
-          <li>Longer-term extension: test richer datasets and more behaviorally grounded evaluation.</li>
+          <li>Replace BERTScore with ROUGE-1 F1 or TF-IDF cosine similarity as the listener scoring metric — these better discriminate between short telegraphic candidates where BERTScore collapses to near-identical scores.</li>
+          <li>Scaling up to larger models, using a more robust model with higher number of parameters would produce more varied output and likely do better at escaping the telegraphic phase.</li>
+          <li>Increase SFT training epochs and experiment with TF-IDF keyword threshold to produce a stronger telegraphic prior before DPO begins, reducing reliance on DPO to induce content-word selectivity from scratch.</li>
         </ul>
       </article>
     </section>
@@ -399,15 +369,13 @@ alpha(t) = alpha_0 * exp(-k * t)
       <article>
         <h2>Implications</h2>
         <ul class="bullet-list">
-          <li>If sweep results hold, this provides a practical recipe for concise, meaning-preserving generation under constrained-data settings.</li>
-          <li>The work can inform model tuning strategies where brevity and semantic fidelity must be jointly optimized.</li>
+          <li>A curriculum-style training pipeline can operationalize cognitive developmental stages in a language model, offering a reproducible framework for testing hypotheses about language acquisition.</li>
         </ul>
       </article>
       <article>
-        <h2>Deployment Considerations</h2>
+        <div class="placeholder">placeholder</div>
         <ul class="bullet-list">
-          <li>Do not deploy current checkpoints for user-facing summarization until collapse diagnostics and held-out surprisal comparisons stabilize.</li>
-          <li>Production candidates should include guardrails for malformed output, plus monitoring of token-collapse indicators over time.</li>
+          <li>The speaker-listener preference framework offers a computational analog to caretaker feedback in child language development, suggesting that social feedback mechanisms in acquisition may be modelable with learned reward signals.</li>
         </ul>
       </article>
     </section>
@@ -434,9 +402,17 @@ python speaker_listener_rl/training/dpo_with_listener_wandb.py</code></pre>
     <section id="conclusion" class="panel">
       <h2>Conclusion</h2>
       <p>
-        Tentative conclusion: the objective is trainable and can produce occasional compressed keyword-style outputs, but this run does not yet show stable telegraphic quality.
-        The next decision point is sweep analysis: we need better tradeoffs between brevity and semantic stability before making a stronger acquisition-style claim.
-        If that tradeoff improves, the impact would be a practical recipe for concise, meaning-preserving generation under low-resource constraints.
+        Our project presents a three-stage training pipeline, unsupervised pretraining, TF-IDF keyword SFT, and DPO with a speaker-listener framework,
+        as a proof-of-concept framework for operationalizing telegraphic speech stage of child language acquisition in a neural language model. By
+        using TF-IDF keyword to induce content-word selectivity and DPO with decaying length penalty to refine meaning preserving compression. The pipeline
+        provides a reproducible method for testing hypotheses about language emergence in language models without explicitly specified linguistic rules.
+      </p>
+      <p>
+        Evaluation via AoA scores across checkpoints offers a principled way to compare model's word-learning trajectory against developmental norms from child
+        language research, bridging contemporary NLP methodology with a human approach to language acquisition. While compute constraints limit the quality of our results,
+        we have a loose idea of the effectivity of combining SFT with DPO for language learning. The results from this work demonstrate the feasibility of this approach
+        and welcome further investigation. Future work incorporating stronger preference signals such as ROUGE-1 or TF-IDF cosine similarity, additional training compute, 
+        and evaluation on child-directed speech corpora such as CHILDES would allow for more definitive claims about the pipeline's ability to replicate developmental language phenomena.
       </p>
     </section>
 

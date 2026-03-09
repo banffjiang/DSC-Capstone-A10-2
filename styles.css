@@ -191,6 +191,10 @@ h1 {
   color: var(--muted);
 }
 
+.placeholder {
+  visibility: hidden
+}
+
 main {
   max-width: 980px;
   margin: 0 auto;
