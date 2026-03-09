@@ -170,6 +170,7 @@ h1 {
 }
 
 .hero-card {
+  min-width: 0;
   padding: 1rem 1.05rem;
   border-radius: 16px;
   border: 1px solid rgba(216, 225, 238, 0.95);

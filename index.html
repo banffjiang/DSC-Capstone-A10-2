@@ -131,7 +131,6 @@
         Our pipeline has three stages: unsupervised pretraining, supervised fine-tuning (SFT), and preference optimization (DPO).
         The same GPT-2 policy model is carried through all stages, while a RoBERTa-based listener is used in DPO to construct chosen/rejected pairs.
       </p>
-      <img class="pipeline-diagram" src="figures/dsc_capstone_diagram.jpg" alt="Diagram showing the pipeline for training the LM." />
       <div class="cards">
         <article class="card">
           <h3>Data</h3>
@@ -165,6 +164,10 @@
           <p>We rely on BabyLM-style data framing, GPT-2 and RoBERTa checkpoints, BERTScore-style semantic comparison, and standard experiment logging tooling rather than building those foundations from scratch.</p>
         </article>
       </div>
+      <img class="pipeline-diagram" src="figures/dsc_capstone_diagram.jpg" alt="Diagram showing the pipeline for training the LM." />
+      <p class="caption">
+        <strong>Figure 1. (Pipeline model):</strong> Diagram illustrating the training pipeline implemented to operationalize telegraphic-speech in language models.
+      </p>
     </section>
 
     <section id="sft" class="panel">
@@ -296,14 +299,14 @@ alpha(t) = alpha_0 * exp(-k * t)
         <article class="chart-card">
           <img class="chart-image" src="figures/lick_gpt2.png" alt="AoA curve for word 'lick' using GPT-2 baseline" />
           <p class="caption">
-            <strong>Figure 1 (GPT-2 baseline):</strong> for the CDI word <code>lick</code>, mean surprisal decreases gradually as log word count increases, showing a steadier learning trajectory.
+            <strong>Figure 2. (GPT-2 baseline):</strong> for the CDI word <code>lick</code>, mean surprisal decreases gradually as log word count increases, showing a steadier learning trajectory.
             The baseline also shows a broader overall reduction in surprisal (about 11.2 to 10.0).
           </p>
         </article>
         <article class="chart-card">
           <img class="chart-image" src="figures/lick_dpo.png" alt="AoA curve for word 'lick' using DPO model" />
           <p class="caption">
-            <strong>Figure 2 (DPO model):</strong> mean surprisal also trends downward, but with sharper local changes rather than the same steady decline.
+            <strong>Figure 3. (DPO model):</strong> mean surprisal also trends downward, but with sharper local changes rather than the same steady decline.
             Its overall reduction is narrower (about 11.64 to 11.54), suggesting a different acquisition pattern for this probe word.
           </p>
         </article>
