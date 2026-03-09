@@ -1,0 +1,134 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: dpo-pretraining
+  namespace: dsc-capstone-25-26
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: nvidia.com/gpu.product
+                operator: In
+                values:
+                - NVIDIA-A10
+                - NVIDIA-A40
+                - NVIDIA-GeForce-RTX-3090
+
+      initContainers:
+      - name: init-permissions
+        image: busybox
+        command: ["sh", "-c", "mkdir -p /workspace/checkpoints && chmod -R 777 /workspace"]
+        volumeMounts:
+        - mountPath: /workspace
+          name: storage-volume
+
+      containers:
+      - name: dpo-trainer
+        image: pytorch/pytorch:2.1.0-cuda11.8-cudnn8-runtime
+        workingDir: /workspace
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            set -e
+            apt-get update && apt-get install -y git && apt-get install -y curl unzip
+            
+            # Clean up if old repo exists and clone the repository
+            rm -rf /workspace/repo  
+            git clone https://github.com/banffjiang/DSC-Capstone-A10-2.git /workspace/repo
+            cd /workspace/repo
+
+            export PYTHONPATH=/workspace/repo
+            
+            pip install --no-cache-dir -r requirements.txt
+            
+            wandb login $WANDB_API_KEY
+
+            unzip -o data/train_100m_passages.zip -d data
+
+            python -m data.build_tf_idf \
+              --wiki_jsonl data/simple_wiki_passages.jsonl \
+              --out data/tfidf_wiki.json
+            
+            python -m training.pretraining_dpo \
+              --idf_json data/tfidf_wiki.json \
+              --train_jsonl data/train_100m_passages.jsonl \
+              --batch_size 16 \
+              --epochs 3 \
+              --lr 1e-5 \
+              --warmup_steps 200 \
+              --total_steps 5000 \
+              --skip_stage0 \
+              --resume_from /workspace/checkpoints/stage1_step9000 \
+              --resume_step 9000
+            
+            echo "checkpoints saved to /workspace/checkpoints"
+            ls -lh /workspace/checkpoints/
+        
+        env:
+        - name: WANDB_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: wandb-api-key
+              key: key
+        - name: WANDB_PROJECT
+          value: "dpo-training"
+        - name: WANDB_MODE
+          value: "online"
+        - name: WORLD_SIZE
+          value: "1"
+        - name: RANK
+          value: "0"
+        - name: LOCAL_RANK
+          value: "0"
+        - name: PYTHONPATH
+          value: /workspace/repo
+        # - name: CUDA_LAUNCH_BLOCKING
+        #   value: "1"
+        - name: TORCH_SHOW_CPP_STACKTRACES
+          value: "1"
+        - name: HF_HOME
+          value: /workspace/.cache/huggingface
+        - name: HF_DATASETS_CACHE
+          value: /workspace/.cache/huggingface/datasets
+        - name: TRANSFORMERS_CACHE
+          value: /workspace/.cache/huggingface/transformers
+        - name: WANDB_DIR
+          value: /workspace/wandb
+        - name: PIP_CACHE_DIR
+          value: /workspace/.cache/pip
+        
+        volumeMounts:
+        - mountPath: /workspace
+          name: storage-volume
+        
+        resources:
+          requests:
+            memory: "24Gi"
+            cpu: "8"
+            #ephemeral-storage: "1Gi"
+            nvidia.com/gpu: "1"
+          limits:
+            memory: "32Gi"
+            cpu: "16"
+            #ephemeral-storage: "2Gi"
+            nvidia.com/gpu: "1"
+
+      restartPolicy: Never
+
+      tolerations:
+      - key: nvidia.com/gpu
+        operator: Exists
+        effect: NoSchedule
+      - key: nautilus.io/issue
+        operator: Exists
+        effect: NoSchedule
+
+      volumes:
+      - name: storage-volume
+        persistentVolumeClaim:
+          claimName: dpo-full-storage

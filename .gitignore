@@ -7,3 +7,11 @@ data/train_10M/
 pycache/
 *.py[cod]
 .DS_Store
+
+# Ignore large raw training corpora and generated wiki dump
+data/train_10M/*.train
+data/train_100M/*.train
+data/train_100m_passages.jsonl
+
+data/train_10M/simple_wiki.train
+data/train_100M/simple_wiki.train
