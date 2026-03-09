@@ -1,5 +1,8 @@
 #Ignore model checkpoints
 training/output/
+data/train_100M/
+data/train_100m_passages.jsonl
+data/train_10M/
 
 pycache/
 *.py[cod]
