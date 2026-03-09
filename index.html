@@ -131,6 +131,7 @@
         Our pipeline has three stages: unsupervised pretraining, supervised fine-tuning (SFT), and preference optimization (DPO).
         The same GPT-2 policy model is carried through all stages, while a RoBERTa-based listener is used in DPO to construct chosen/rejected pairs.
       </p>
+      <img class="pipeline-diagram" src="figures/dsc_capstone_diagram.jpg" alt="Diagram showing the pipeline for training the LM." />
       <div class="cards">
         <article class="card">
           <h3>Data</h3>
@@ -167,7 +168,7 @@
     </section>
 
     <section id="sft" class="panel">
-      <h2>SFT Stage (What It Did)</h2>
+      <h2>SFT Stage</h2>
       <p>
         SFT trains the model with standard cross-entropy on keyword summaries extracted from each passage using TF-IDF.
         This stage teaches the model to produce compact keyword-style outputs before preference optimization.
@@ -182,7 +183,7 @@ Prompt format:
     </section>
 
     <section id="dpo" class="panel">
-      <h2>DPO Stage (What It Did)</h2>
+      <h2>DPO Stage</h2>
       <p>
         Direct Preference Optimization (DPO) trains on pairs of candidate summaries labeled as chosen/rejected by the listener.
         The model is updated to increase probability on chosen outputs and decrease probability on rejected outputs, with an added decaying brevity pressure.
