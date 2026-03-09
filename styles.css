@@ -303,12 +303,6 @@ main {
   background: #f6f8fc;
 }
 
-.pipeline-figure {
-  width: 100%;
-  overflow-x: auto; 
-  -webkit-overflow-scrolling: touch;
-}
-
 .pipeline-image {
   max-width: none;
   width: 100%;
